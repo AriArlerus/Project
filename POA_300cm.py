@@ -17,7 +17,7 @@ GID_MAP = {
     30: "874540621",
     40: "370951230",
     50: "481672648",
-    300: "96634151",
+    #300: "96634151",
 }
 
 # 🔥 เลือกระยะที่ต้องการโหลด
@@ -101,10 +101,11 @@ class POA:
 
         self.best_fitness = np.min(F)
         self.best_solution = X[np.argmin(F)].copy()
-        self.fitness_history.append(self.best_fitness)
+        self.fitness_history = [self.best_fitness]
 
         for t in range(1, self.T + 1):
             prey = self.lb + np.random.rand(self.m) * (self.ub - self.lb)
+
             # Phase 1: Exploration
             for i in range(self.n):
                 I = np.random.choice([1, 2])
@@ -133,8 +134,7 @@ class POA:
 
             self.fitness_history.append(self.best_fitness)
 
-        return self.best_solution, self.best_fitness
-
+        return self.best_solution, self.best_fitness, X
 
 # ============================================================
 # ส่วนที่ 3: เมนโปรแกรม
@@ -142,71 +142,58 @@ class POA:
 
 if __name__ == "__main__":
     print("\n--- เริ่มการปรับปรุงข้อมูลด้วย POA ---")
-    results_list = []
 
-    for index, row in df.iterrows():
-        m_val = float(row["Measured (cm)"])
-        d_val = float(row["Desired (cm)"])
-        idx_val = row["Index"]
-        src_dist = row["Source Distance (cm)"]
+    # เลือก 1 แถวเพื่อใช้สร้าง population plot แบบ paper
+    row = df.iloc[0]
 
-        poa_engine = POA(n=431, T=10)
-        best_sol, best_err = poa_engine.run(m_val, d_val)
+    m_val = float(row["Measured (cm)"])
+    d_val = float(row["Desired (cm)"])
+    idx_val = row["Index"]
+    src_dist = row["Source Distance (cm)"]
 
-        print(
-            f"Distance {src_dist} cm | Index {idx_val}: "
-            f"Measured={m_val:.2f}, Desired={d_val:.2f} -> POA Error={best_err:.4e}"
-        )
+    poa_engine = POA(n=431, T=10)
+    best_sol, best_err, X_final = poa_engine.run(m_val, d_val)
 
-        results_list.append(
-    {
-        "Source Distance (cm)": src_dist,
-        "Index": idx_val,
-        "Measured": m_val,
-        "Desired": d_val,
-        "BestMeasured": best_sol[0],
-        "BestDesired": best_sol[1],
-        "BestError": best_err,
-        "History": poa_engine.fitness_history,
-    }
-)
+    print(
+        f"Distance {src_dist} cm | Index {idx_val}: "
+        f"Measured={m_val:.2f}, Desired={d_val:.2f} -> POA Error={best_err:.4e}"
+    )
 
+    # ===== Plot population จริงของ POA =====
+    desired_plot = X_final[:, 1]
+    measured_plot = X_final[:, 0]
 
-    if results_list:
-        desired_plot = np.array([r["BestDesired"] for r in results_list], dtype=float)
-        measured_plot = np.array([r["BestMeasured"] for r in results_list], dtype=float)
+    # sort ตาม desired เพื่อให้กราฟเรียงสวย
+    sort_idx = np.argsort(desired_plot)
+    desired_plot = desired_plot[sort_idx]
+    measured_plot = measured_plot[sort_idx]
 
-        # sort ให้เป็นเส้นตรงสวยแบบ paper
-        sort_idx = np.argsort(desired_plot)
-        desired_plot = desired_plot[sort_idx]
-        measured_plot = measured_plot[sort_idx]
+    pop_idx = np.arange(1, len(desired_plot) + 1)
 
-        pop_idx = np.arange(1, len(desired_plot) + 1)
+    plt.figure(figsize=(8, 6))
+    ax = plt.gca()
+    ax.set_facecolor("#f0f0f0")
 
-        plt.figure(figsize=(8, 6))
-        ax = plt.gca()
-        ax.set_facecolor("#f0f0f0")  # ให้เหมือนพื้นหลังใน paper
+    plt.plot(
+        pop_idx,
+        desired_plot,
+        "ro",
+        markersize=5,
+        markerfacecolor="none",
+        label="desired distances",
+    )
+    plt.plot(
+        pop_idx,
+        measured_plot,
+        "b*",
+        markersize=5,
+        label="measured distances",
+    )
 
-        plt.plot(
-            pop_idx,
-            desired_plot,
-            "ro",
-            markersize=5,
-            markerfacecolor="none",
-            label="desired distances",
-        )
-        plt.plot(
-            pop_idx,
-            measured_plot,
-            "b*",
-            markersize=5,
-            label="measured distances",
-        )
-
-        plt.xlabel("number of population")
-        plt.ylabel("distances")
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-
-        plt.tight_layout()
-        plt.show()
+    plt.xlabel("number of population")
+    plt.ylabel("distances")
+    plt.title(f"POA Population Plot | Distance {src_dist} cm | Index {idx_val}")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
