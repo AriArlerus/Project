@@ -5,22 +5,52 @@ import io
 import requests
 
 # ============================================================
-# ส่วนที่ 1: ดึงข้อมูลจาก Google Sheets (Public)
+# ส่วนที่ 1: Load Dataset (เลือกชีตตามระยะ)
 # ============================================================
 
-SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR2niB432N1Z2rFE3-SggNaLKS2jJ5UyVVWlmIvlEvshexcMACSd0IpsL-UsV-Q2AMyBr_ETi1VxUw3/pub?gid=232904181&single=true&output=csv"
+# 🔥 เปลี่ยนระยะตรงนี้
+DISTANCE_CM = 300   # เช่น 10, 20, 30, ..., 300
 
-def load_data_from_gsheets(sheet_url):
-    try:
-        response = requests.get(sheet_url)
-        response.raise_for_status()
-        df = pd.read_csv(io.StringIO(response.content.decode('utf-8')))
-        df.columns = df.columns.str.strip()
-        print(f"ดึงข้อมูลสำเร็จ! จำนวนทั้งหมด: {len(df)} แถว")
-        return df
-    except Exception as e:
-        print(f"เกิดข้อผิดพลาดในการดึงข้อมูล: {e}")
-        return None
+# 🔥 mapping ระยะ → gid (ใส่ของคุณให้ครบ)
+GID_MAP = {
+    20:  "232904181",
+    300: "96634151",
+}
+
+# ตรวจว่ามีระยะนี้ไหม
+if DISTANCE_CM not in GID_MAP:
+    raise ValueError(f"Distance {DISTANCE_CM} cm not found in GID_MAP")
+
+# base URL
+BASE_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR2niB432N1Z2rFE3-SggNaLKS2jJ5UyVVWlmIvlEvshexcMACSd0IpsL-UsV-Q2AMyBr_ETi1VxUw3/pub?output=csv&single=true&gid="
+
+# สร้าง URL
+sheet_url = BASE_URL + GID_MAP[DISTANCE_CM]
+
+# โหลดข้อมูล
+response = requests.get(sheet_url, timeout=20)
+response.raise_for_status()
+
+df = pd.read_csv(io.StringIO(response.content.decode("utf-8")))
+
+# clean column
+df.columns = df.columns.str.strip()
+
+# ตรวจ column สำคัญ
+required_cols = ["Measured (cm)", "Desired (cm)", "Index"]
+for col in required_cols:
+    if col not in df.columns:
+        raise KeyError(f"Missing column: {col}")
+
+# เรียง index
+df = df.sort_values(by="Index").reset_index(drop=True)
+
+# extract numpy
+measured_distances = df["Measured (cm)"].astype(float).values
+desired_distances  = df["Desired (cm)"].astype(float).values
+n_samples = len(df)
+
+print(f"[INFO] Loaded {n_samples} rows from {DISTANCE_CM} cm")
 
 # ============================================================
 # ส่วนที่ 2: Pelican Optimization Algorithm (POA)
