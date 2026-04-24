@@ -33,7 +33,7 @@ const char* ssid       = "STAR_2.4G";
 const char* password   = "Ari3025.";
 
 String scriptURL   = "https://script.google.com/macros/s/AKfycby81YZ1N3qMHMBcCPavn14FWlIWcuMuyAoQuDu0rkB_MttxQBVyvURqqL_SVNgOAKeXUA/exec";
-String sensorName  = "SensorData300cm";  
+String sensorName  = "SensorData";  
 
 // ──────────────────────────────────────────
 // ขา (Pins)
@@ -48,7 +48,7 @@ String sensorName  = "SensorData300cm";
 #define SOUND_SPEED       0.034  
 #define MIN_DISTANCE_CM   2.0
 #define MAX_DISTANCE_CM   400.0
-#define NUM_SAMPLES       431     // n_population ในเปเปอร์ (ตารางที่ 2)
+#define NUM_SAMPLES       1     // n_population ในเปเปอร์ (ตารางที่ 2)
 #define NUM_AVG           5       // วัดเฉลี่ยกี่ครั้ง (ลด noise)
 #define MEASURE_INTERVAL  5000    // ms ระหว่างการวัดแต่ละครั้ง
 
