@@ -36,34 +36,48 @@ except Exception as e:
 
 
 # ============================================================
-# ส่วนที่ 2: Pelican Optimization Algorithm (POA)
+# ส่วนที่ 2: Hybrid POA -> PSO
 # ------------------------------------------------------------
-# ค้นหาสัมประสิทธิ์สมการชดเชย (calibration equation)
-#     Desired_pred = a * Measured^2 + b * Measured + c
-# ใช้ Huber loss เพื่อให้ทนต่อ outlier
-# ตัวแปรค้นหา m = 3 :  [a, b, c]
+# แนวคิด:
+#   Phase A (POA):  ใช้ POA ทำ exploration กว้าง ๆ ก่อน
+#                   (POA มี random prey + radius ที่ค่อย ๆ หด ช่วย
+#                    หลีกเลี่ยง local optima ในช่วงต้น)
+#   Phase B (PSO):  ใช้ PSO ลู่เข้าจุดที่ดีที่สุดอย่างรวดเร็ว
+#                   โดยรับ population สุดท้ายของ POA เป็นจุดเริ่ม
+#                   (PSO เก่ง local refinement เพราะมี pbest/gbest guide)
+#
+#   ค้นหาสัมประสิทธิ์สมการชดเชย:
+#       Desired_pred = a * Measured^2 + b * Measured + c
+#   ใช้ Huber loss (robust ต่อ outlier),  m = 3 :  [a, b, c]
 # ============================================================
 
-class POA_Calibration:
+class Hybrid_POA_PSO:
     def __init__(self, measured, desired,
-                 n=50, m=3, T=100, R=0.2, huber_delta=3.0):
+                 n=50, m=3,
+                 T_poa=50, T_pso=50,
+                 R=0.2,
+                 w=0.7298, c1=1.49618, c2=1.49618,
+                 huber_delta=3.0):
         self.measured = measured
         self.desired  = desired
-        self.n = n
-        self.m = m
-        self.T = T
+        self.n  = n
+        self.m  = m
+        self.T_poa = T_poa
+        self.T_pso = T_pso
+        # POA params
         self.R = R
+        # PSO params
+        self.w  = w
+        self.c1 = c1
+        self.c2 = c2
         self.huber_delta = huber_delta
         self.fitness_history = []
 
-        # ขอบเขตของ [a, b, c]
-        # a ใกล้ 0 (เทอม non-linear เล็กน้อย), b ใกล้ 1, c คือ offset
         self.lb = np.array([-0.001,  0.8, -20.0])
         self.ub = np.array([ 0.001,  1.2,  20.0])
+        self.v_max = 0.2 * (self.ub - self.lb)
 
     def _huber(self, r):
-        """Huber loss: quadratic เมื่อ |r|<=delta, linear เมื่อเกินกว่านั้น
-        ทำให้ outlier (จุดที่ residual ใหญ่มาก) ไม่ครอบงำการ fit"""
         d = self.huber_delta
         absr = np.abs(r)
         quad = 0.5 * r ** 2
@@ -73,18 +87,16 @@ class POA_Calibration:
     def fitness_function(self, w):
         a, b, c = w
         pred = a * self.measured ** 2 + b * self.measured + c
-        residual = pred - self.desired
-        return self._huber(residual)
+        return self._huber(pred - self.desired)
 
-    def run(self):
-        X = self.lb + np.random.rand(self.n, self.m) * (self.ub - self.lb)
+    # ---------- Phase A: POA ----------
+    def _run_poa(self, X):
         F = np.array([self.fitness_function(s) for s in X])
+        best_fitness  = float(np.min(F))
+        best_solution = X[np.argmin(F)].copy()
+        self.fitness_history.append(best_fitness)
 
-        self.best_fitness  = float(np.min(F))
-        self.best_solution = X[np.argmin(F)].copy()
-        self.fitness_history = [self.best_fitness]
-
-        for t in range(1, self.T + 1):
+        for t in range(1, self.T_poa + 1):
             prey   = self.lb + np.random.rand(self.m) * (self.ub - self.lb)
             f_prey = self.fitness_function(prey)
 
@@ -101,7 +113,7 @@ class POA_Calibration:
                     X[i], F[i] = X_p1, f_p1
 
                 # Phase 2: Exploitation
-                radius = self.R * (1 - t / self.T)
+                radius = self.R * (1 - t / self.T_poa)
                 X_p2 = X[i] + radius * (2 * np.random.rand(self.m) - 1) * X[i]
                 X_p2 = np.clip(X_p2, self.lb, self.ub)
                 f_p2 = self.fitness_function(X_p2)
@@ -109,13 +121,59 @@ class POA_Calibration:
                     X[i], F[i] = X_p2, f_p2
 
             cur = float(np.min(F))
-            if cur < self.best_fitness:
-                self.best_fitness  = cur
-                self.best_solution = X[np.argmin(F)].copy()
+            if cur < best_fitness:
+                best_fitness  = cur
+                best_solution = X[np.argmin(F)].copy()
+            self.fitness_history.append(best_fitness)
 
-            self.fitness_history.append(self.best_fitness)
+        return X, F, best_solution, best_fitness
 
-        return self.best_solution, self.best_fitness
+    # ---------- Phase B: PSO ----------
+    def _run_pso(self, X, F, gbest, gbest_fit):
+        V = np.random.uniform(-self.v_max, self.v_max, (self.n, self.m))
+        # ใช้ตำแหน่ง/fitness จาก POA เป็น pbest เริ่มต้น
+        pbest     = X.copy()
+        pbest_fit = F.copy()
+
+        for t in range(1, self.T_pso + 1):
+            for i in range(self.n):
+                r1 = np.random.rand(self.m)
+                r2 = np.random.rand(self.m)
+                V[i] = (self.w  * V[i]
+                        + self.c1 * r1 * (pbest[i] - X[i])
+                        + self.c2 * r2 * (gbest    - X[i]))
+                V[i] = np.clip(V[i], -self.v_max, self.v_max)
+                X[i] = np.clip(X[i] + V[i], self.lb, self.ub)
+                fit_curr = self.fitness_function(X[i])
+                if fit_curr < pbest_fit[i]:
+                    pbest[i]     = X[i].copy()
+                    pbest_fit[i] = fit_curr
+                    if fit_curr < gbest_fit:
+                        gbest     = X[i].copy()
+                        gbest_fit = float(fit_curr)
+            self.fitness_history.append(gbest_fit)
+
+        return gbest, gbest_fit
+
+    # ---------- run ----------
+    def run(self):
+        X = self.lb + np.random.rand(self.n, self.m) * (self.ub - self.lb)
+
+        # Phase A: POA
+        print("[Hybrid] >> Phase A: POA ...")
+        X_after_poa, F_after_poa, gbest, gbest_fit = self._run_poa(X)
+        print(f"           POA best fitness = {gbest_fit:.6f}")
+
+        # Phase B: PSO refine
+        print("[Hybrid] >> Phase B: PSO refine ...")
+        best_sol, best_fit = self._run_pso(
+            X_after_poa.copy(), F_after_poa.copy(), gbest.copy(), gbest_fit)
+        print(f"           PSO refined fitness = {best_fit:.6f}")
+
+        self.best_solution = best_sol
+        self.best_fitness  = best_fit
+        self.split_iter    = self.T_poa + 1
+        return best_sol, best_fit
 
 
 # ============================================================
@@ -133,59 +191,60 @@ if __name__ == "__main__":
     desired_all  = df["Desired (cm)"].astype(float).values
     n_samples    = len(measured_all)
 
-    # ----- รัน POA หาสมการชดเชย -----
-    print("\n--- เริ่มหาสมการชดเชยด้วย POA (Quadratic + Huber loss) ---")
-    poa = POA_Calibration(measured_all, desired_all,
-                          n=50, m=3, T=100, R=0.2, huber_delta=3.0)
-    best_w, best_loss = poa.run()
+    print("\n--- Hybrid POA -> PSO (Quadratic + Huber loss) ---")
+    hyb = Hybrid_POA_PSO(measured_all, desired_all,
+                         n=50, m=3,
+                         T_poa=50, T_pso=50,
+                         R=0.2,
+                         w=0.7298, c1=1.49618, c2=1.49618,
+                         huber_delta=3.0)
+    best_w, best_loss = hyb.run()
     a, b, c = best_w
     print(f"\n[RESULT] สมการชดเชย:")
     print(f"   Desired_pred = ({a:.6e}) * M^2 + ({b:.6f}) * M + ({c:.6f})")
 
-    # ----- ใช้สมการกับ measurement -----
     corrected = a * measured_all ** 2 + b * measured_all + c
     residual  = corrected - desired_all
     abs_err   = np.abs(residual)
 
-    # ----- แยก inlier / outlier ด้วย MAD -----
     med = np.median(abs_err)
     mad = np.median(np.abs(abs_err - med))
     threshold = med + 5.0 * 1.4826 * mad
     inliers = abs_err <= threshold
     n_out   = int((~inliers).sum())
 
-    # ----- Metrics -----
     classical_mae = np.mean(np.abs(measured_all - desired_all))
-    poa_mae_all   = np.mean(abs_err)
-    poa_mae_in    = np.mean(abs_err[inliers])
-    rmse_all      = np.sqrt(np.mean(residual ** 2))
-    rmse_in       = np.sqrt(np.mean(residual[inliers] ** 2))
+    mae_all = np.mean(abs_err)
+    mae_in  = np.mean(abs_err[inliers])
+    rmse_all = np.sqrt(np.mean(residual ** 2))
+    rmse_in  = np.sqrt(np.mean(residual[inliers] ** 2))
 
     print("\n=== Summary ===")
     print(f"จำนวนข้อมูล                 : {n_samples} จุด")
     print(f"Outlier ที่ตรวจพบ (>5*MAD)  : {n_out} จุด")
     print("-" * 55)
     print(f"MAE  ก่อนคาลิเบรท (classical) : {classical_mae:7.4f} cm")
-    print(f"MAE  หลังคาลิเบรท (ทุกจุด)    : {poa_mae_all:7.4f} cm  "
-          f"(ลด {(1 - poa_mae_all / classical_mae) * 100:.2f}%)")
-    print(f"MAE  หลังคาลิเบรท (inlier)    : {poa_mae_in:7.4f} cm  "
-          f"(ลด {(1 - poa_mae_in / classical_mae) * 100:.2f}%)")
+    print(f"MAE  หลังคาลิเบรท (ทุกจุด)    : {mae_all:7.4f} cm  "
+          f"(ลด {(1 - mae_all / classical_mae) * 100:.2f}%)")
+    print(f"MAE  หลังคาลิเบรท (inlier)    : {mae_in:7.4f} cm  "
+          f"(ลด {(1 - mae_in / classical_mae) * 100:.2f}%)")
     print(f"RMSE หลังคาลิเบรท (ทุกจุด)    : {rmse_all:7.4f} cm")
     print(f"RMSE หลังคาลิเบรท (inlier)    : {rmse_in:7.4f} cm")
 
     # --------------------------------------------------------
     # Figure 8: Convergence
     # --------------------------------------------------------
-    history = np.array(poa.fitness_history)
-    plt.figure(figsize=(7, 5))
+    history = np.array(hyb.fitness_history)
+    plt.figure(figsize=(8, 5))
     it_x = np.arange(len(history))
     plt.plot(it_x, history, linewidth=2,
-             label="POA fitness (Huber loss)", color="tab:blue")
+             label="Hybrid POA->PSO (Huber loss)", color="tab:orange")
+    plt.axvline(hyb.split_iter, color="k", linestyle="--", linewidth=1,
+                label=f"switch POA -> PSO (iter {hyb.split_iter})")
     best_idx = int(np.argmin(history))
-    plt.plot(it_x[best_idx], history[best_idx], "ro",
-             label="Best fitness")
+    plt.plot(it_x[best_idx], history[best_idx], "ro", label="Best fitness")
     plt.xlabel("Iterations")
-    plt.ylabel("POA fitness function")
+    plt.ylabel("Hybrid fitness function")
     plt.xlim(0, len(history) - 1)
     plt.grid(True, alpha=0.5)
     plt.legend()
@@ -199,7 +258,8 @@ if __name__ == "__main__":
     plt.figure(figsize=(8, 6))
     plt.plot(pop_idx, desired_all, "ro", markersize=5,
              markerfacecolor="none", label="desired distances")
-    plt.plot(pop_idx, corrected, "b*", markersize=5,
+    plt.plot(pop_idx, corrected, color="darkorange", marker="*",
+             linestyle="None", markersize=5,
              label="calibrated measured distances")
     plt.xlabel("number of population")
     plt.ylabel("distances (cm)")
@@ -216,8 +276,9 @@ if __name__ == "__main__":
     plt.figure(figsize=(8, 5))
     plt.plot(pop_idx, measured_all - desired_all, "r.",
              markersize=4, alpha=0.6, label="error before calibration")
-    plt.plot(pop_idx, residual, "b.",
-             markersize=4, alpha=0.6, label="error after calibration")
+    plt.plot(pop_idx, residual, color="darkorange", marker=".",
+             linestyle="None", markersize=4, alpha=0.6,
+             label="error after calibration")
     plt.axhline(0, color="k", linewidth=0.8)
     plt.xlabel("number of population")
     plt.ylabel("error (cm)")
