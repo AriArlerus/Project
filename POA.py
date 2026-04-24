@@ -101,8 +101,11 @@ class POA_Calibration:
                     X[i], F[i] = X_p1, f_p1
 
                 # Phase 2: Exploitation
+                # หมายเหตุ: สูตรต้นฉบับใช้ * X[i] ซึ่งเมื่อ X[i] ใกล้ 0 (เช่นค่า a)
+                # จะทำให้ขยับไม่ได้เลย จึงเปลี่ยนเป็นคูณช่วง search (ub - lb)
+                # เพื่อให้ทุก dimension มีโอกาสปรับเท่ากัน
                 radius = self.R * (1 - t / self.T)
-                X_p2 = X[i] + radius * (2 * np.random.rand(self.m) - 1) * X[i]
+                X_p2 = X[i] + radius * (2 * np.random.rand(self.m) - 1) * (self.ub - self.lb)
                 X_p2 = np.clip(X_p2, self.lb, self.ub)
                 f_p2 = self.fitness_function(X_p2)
                 if f_p2 < F[i]:

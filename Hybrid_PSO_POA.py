@@ -89,6 +89,7 @@ class Hybrid_PSO_POA:
 
     # ---------- Phase A: PSO ----------
     def _run_pso(self, X):
+        # Phase A เริ่มจาก scratch จึง random V ปกติ
         V = np.random.uniform(-self.v_max, self.v_max, (self.n, self.m))
         pbest     = X.copy()
         pbest_fit = np.array([self.fitness_function(p) for p in X])
@@ -137,9 +138,9 @@ class Hybrid_PSO_POA:
                 if f_p1 < F[i]:
                     X[i], F[i] = X_p1, f_p1
 
-                # Phase 2: Exploitation
+                # Phase 2: Exploitation (ใช้ (ub-lb) แทน X[i] เพื่อกัน a ขยับไม่ได้)
                 radius = self.R * (1 - t / self.T_poa)
-                X_p2 = X[i] + radius * (2 * np.random.rand(self.m) - 1) * X[i]
+                X_p2 = X[i] + radius * (2 * np.random.rand(self.m) - 1) * (self.ub - self.lb)
                 X_p2 = np.clip(X_p2, self.lb, self.ub)
                 f_p2 = self.fitness_function(X_p2)
                 if f_p2 < F[i]:
@@ -156,6 +157,8 @@ class Hybrid_PSO_POA:
 
     # ---------- run ----------
     def run(self):
+        # reset history เผื่อมีการเรียก run() ซ้ำบน object เดิม
+        self.fitness_history = []
         # Init population
         X = self.lb + np.random.rand(self.n, self.m) * (self.ub - self.lb)
 
