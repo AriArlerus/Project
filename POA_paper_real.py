@@ -30,9 +30,9 @@ import requests
 # ส่วนที่ 1: Load Dataset (ดึงจาก Google Sheets)
 # ============================================================
 
-SHEET_NAME = "SensorDataTest"
+SHEET_NAME = "SensorData"
 SHEET_ID = "169b1I4Gos8UhkzDkxH6uX9ty3yaQ_8kCqRGjqnpb0dU"
-GID = "1445438450"
+GID = "1511238558"
 sheet_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={GID}"
 
 try:
