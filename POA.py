@@ -46,7 +46,7 @@ except Exception as e:
 
 class POA_Calibration:
     def __init__(self, measured, desired,
-                 n=50, m=3, T=100, R=0.2, huber_delta=3.0):
+                 n=50, m=3, T=200, R=0.2, huber_delta=6.0):
         self.measured = measured
         self.desired  = desired
         self.n = n
@@ -58,8 +58,8 @@ class POA_Calibration:
 
         # ขอบเขตของ [a, b, c]
         # a ใกล้ 0 (เทอม non-linear เล็กน้อย), b ใกล้ 1, c คือ offset
-        self.lb = np.array([-0.001,  0.8, -20.0])
-        self.ub = np.array([ 0.001,  1.2,  20.0])
+        self.lb = np.array([-0.0003,  0.90, -5.0])
+        self.ub = np.array([ 0.0003,  1.20, 12.0])
 
     def _huber(self, r):
         """Huber loss: quadratic เมื่อ |r|<=delta, linear เมื่อเกินกว่านั้น
@@ -139,7 +139,7 @@ if __name__ == "__main__":
     # ----- รัน POA หาสมการชดเชย -----
     print("\n--- เริ่มหาสมการชดเชยด้วย POA (Quadratic + Huber loss) ---")
     poa = POA_Calibration(measured_all, desired_all,
-                          n=50, m=3, T=100, R=0.2, huber_delta=3.0)
+                          n=50, m=3, T=200, R=0.2, huber_delta=6.0)
     best_w, best_loss = poa.run()
     a, b, c = best_w
     print(f"\n[RESULT] สมการชดเชย:")

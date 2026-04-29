@@ -52,9 +52,9 @@ except Exception as e:
 
 class PSO_Calibration:
     def __init__(self, measured, desired,
-                 n=50, m=3, T=100,
+                 n=50, m=3, T=200,
                  w=0.7298, c1=1.49618, c2=1.49618,
-                 huber_delta=3.0):
+                 huber_delta=6.0):
         self.measured = measured
         self.desired  = desired
         self.n = n
@@ -67,8 +67,8 @@ class PSO_Calibration:
         self.fitness_history = []
 
         # ขอบเขตของ [a, b, c]  (เหมือน POA เพื่อเทียบกันได้ตรง ๆ)
-        self.lb = np.array([-0.001,  0.8, -20.0])
-        self.ub = np.array([ 0.001,  1.2,  20.0])
+        self.lb = np.array([-0.0003,  0.90, -5.0])
+        self.ub = np.array([ 0.0003,  1.20, 12.0])
 
         # จำกัดความเร็วสูงสุดที่ 20% ของช่วง search
         self.v_max = 0.2 * (self.ub - self.lb)
@@ -158,9 +158,9 @@ if __name__ == "__main__":
     # ----- รัน PSO หาสมการชดเชย -----
     print("\n--- เริ่มหาสมการชดเชยด้วย PSO (Quadratic + Huber loss) ---")
     pso = PSO_Calibration(measured_all, desired_all,
-                          n=50, m=3, T=100,
+                          n=50, m=3, T=200,
                           w=0.7298, c1=1.49618, c2=1.49618,
-                          huber_delta=3.0)
+                          huber_delta=6.0)
     best_w, best_loss = pso.run()
     a, b, c = best_w
     print(f"\n[RESULT] สมการชดเชย:")
