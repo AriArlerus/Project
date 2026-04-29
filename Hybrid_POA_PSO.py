@@ -54,10 +54,10 @@ except Exception as e:
 class Hybrid_POA_PSO:
     def __init__(self, measured, desired,
                  n=50, m=3,
-                 T_poa=50, T_pso=50,
+                 T_poa=150, T_pso=50,
                  R=0.2,
                  w=0.7298, c1=1.49618, c2=1.49618,
-                 huber_delta=3.0):
+                 huber_delta=6.0):
         self.measured = measured
         self.desired  = desired
         self.n  = n
@@ -73,8 +73,8 @@ class Hybrid_POA_PSO:
         self.huber_delta = huber_delta
         self.fitness_history = []
 
-        self.lb = np.array([-0.001,  0.8, -20.0])
-        self.ub = np.array([ 0.001,  1.2,  20.0])
+        self.lb = np.array([-0.0003,  0.90, -5.0])
+        self.ub = np.array([ 0.0003,  1.20, 12.0])
         self.v_max = 0.2 * (self.ub - self.lb)
 
     def _huber(self, r):
@@ -200,10 +200,10 @@ if __name__ == "__main__":
     print("\n--- Hybrid POA -> PSO (Quadratic + Huber loss) ---")
     hyb = Hybrid_POA_PSO(measured_all, desired_all,
                          n=50, m=3,
-                         T_poa=50, T_pso=50,
+                         T_poa=150, T_pso=50,
                          R=0.2,
                          w=0.7298, c1=1.49618, c2=1.49618,
-                         huber_delta=3.0)
+                         huber_delta=6.0)
     best_w, best_loss = hyb.run()
     a, b, c = best_w
     print(f"\n[RESULT] สมการชดเชย:")
