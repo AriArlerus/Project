@@ -134,6 +134,7 @@ if __name__ == "__main__":
 
     measured_all = df["Measured (cm)"].astype(float).values
     desired_all  = df["Desired (cm)"].astype(float).values
+    raw_error = measured_all - desired_all
     n_samples    = len(measured_all)
 
     # ----- รัน POA หาสมการชดเชย -----
@@ -177,6 +178,27 @@ if __name__ == "__main__":
     print(f"RMSE หลังคาลิเบรท (inlier)    : {rmse_in:7.4f} cm")
 
     # --------------------------------------------------------
+    # Figure 7: Error vs Measured (Before Optimization)
+    # --------------------------------------------------------
+   # Fit polynomial degree 2 เพื่อดูแนวโน้ม
+    coeffs = np.polyfit(measured_all, raw_error, 2)
+    x_fit = np.linspace(min(measured_all), max(measured_all), 200)
+    y_fit = np.polyval(coeffs, x_fit)
+
+    plt.figure(figsize=(7, 5))
+    plt.scatter(measured_all, raw_error, s=20, alpha=0.5, label="Raw Error")
+    plt.plot(x_fit, y_fit, linewidth=2, label="Quadratic Trend")
+
+    plt.axhline(0, linestyle='--')
+
+    plt.xlabel("Measured Distance (cm)")
+    plt.ylabel("Error (cm)")
+    plt.title("Error Pattern Before Optimization")
+    plt.legend()
+    plt.grid(True, alpha=0.4)
+    plt.tight_layout()
+    plt.show()
+    # --------------------------------------------------------
     # Figure 8: Convergence
     # --------------------------------------------------------
     history = np.array(poa.fitness_history)
@@ -196,16 +218,16 @@ if __name__ == "__main__":
     plt.show()
 
     # --------------------------------------------------------
-    # Figure 9: Desired vs Calibrated
+    # Figure 9: Desired vs Optimized
     # --------------------------------------------------------
     pop_idx = np.arange(1, n_samples + 1)
     plt.figure(figsize=(8, 6))
     plt.plot(pop_idx, desired_all, "ro", markersize=5,
-             markerfacecolor="none", label="desired distances")
+             markerfacecolor="none", label="Desired distances")
     plt.plot(pop_idx, corrected, "b*", markersize=5,
-             label="calibrated measured distances")
-    plt.xlabel("number of population")
-    plt.ylabel("distances (cm)")
+             label="Optimized Measured Distances")
+    plt.xlabel("Measured (cm)")
+    plt.ylabel("Distances (cm)")
     plt.xlim(0, max(450, n_samples + 20))
     plt.ylim(0, max(desired_all) + 20)
     plt.legend(loc="upper left")
@@ -218,12 +240,12 @@ if __name__ == "__main__":
     # --------------------------------------------------------
     plt.figure(figsize=(8, 5))
     plt.plot(pop_idx, measured_all - desired_all, "r.",
-             markersize=4, alpha=0.6, label="error before calibration")
+             markersize=4, alpha=0.6, label="Error before optimization")
     plt.plot(pop_idx, residual, "b.",
-             markersize=4, alpha=0.6, label="error after calibration")
+             markersize=4, alpha=0.6, label="Error after optimization")
     plt.axhline(0, color="k", linewidth=0.8)
-    plt.xlabel("number of population")
-    plt.ylabel("error (cm)")
+    plt.xlabel("Measured (cm)")
+    plt.ylabel("Error (cm)")
     plt.grid(True, alpha=0.4)
     plt.legend()
     plt.tight_layout()

@@ -258,17 +258,17 @@ if __name__ == "__main__":
     plt.show()
 
     # --------------------------------------------------------
-    # Figure 9: Desired vs Calibrated
+    # Figure 9: Desired vs Optimized
     # --------------------------------------------------------
     pop_idx = np.arange(1, n_samples + 1)
     plt.figure(figsize=(8, 6))
     plt.plot(pop_idx, desired_all, "ro", markersize=5,
-             markerfacecolor="none", label="desired distances")
+             markerfacecolor="none", label="Desired distances")
     plt.plot(pop_idx, corrected, color="darkorange", marker="*",
              linestyle="None", markersize=5,
-             label="calibrated measured distances")
-    plt.xlabel("number of population")
-    plt.ylabel("distances (cm)")
+             label="Optimized Measured Distances")
+    plt.xlabel("Measured (cm)")
+    plt.ylabel("Distances (cm)")
     plt.xlim(0, max(450, n_samples + 20))
     plt.ylim(0, max(desired_all) + 20)
     plt.legend(loc="upper left")
@@ -281,13 +281,13 @@ if __name__ == "__main__":
     # --------------------------------------------------------
     plt.figure(figsize=(8, 5))
     plt.plot(pop_idx, measured_all - desired_all, "r.",
-             markersize=4, alpha=0.6, label="error before calibration")
+             markersize=4, alpha=0.6, label="Error before Optimization")
     plt.plot(pop_idx, residual, color="darkorange", marker=".",
              linestyle="None", markersize=4, alpha=0.6,
-             label="error after calibration")
+             label="Error After Optimization")
     plt.axhline(0, color="k", linewidth=0.8)
-    plt.xlabel("number of population")
-    plt.ylabel("error (cm)")
+    plt.xlabel("Measured (cm)")
+    plt.ylabel("Error (cm)")
     plt.grid(True, alpha=0.4)
     plt.legend()
     plt.tight_layout()
