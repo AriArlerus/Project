@@ -253,11 +253,16 @@ pop_idx = np.arange(1, n_samples + 1)
 fig8, axes8 = plt.subplots(1, 3, figsize=(15, 5))
 fig8.suptitle("Convergence Performance", fontsize=16, fontweight='bold')
 
-# [2] PSO
+all_fitness = np.concatenate([pso.fitness_history, poa.fitness_history, hyb.fitness_history])
+y_min, y_max = np.min(all_fitness), np.max(all_fitness)
+y_margin = (y_max - y_min) * 0.05
+
+# [0] PSO
 axes8[0].plot(pso.fitness_history, linewidth=2, color="tab:green")
 axes8[0].plot(np.argmin(pso.fitness_history), np.min(pso.fitness_history), "go")
 axes8[0].set_title("PSO Convergence")
 axes8[0].set_xlabel("Iterations")
+axes8[0].set_ylabel("Fitness (Huber loss)")
 axes8[0].grid(True, alpha=0.5)
 
 # [1] POA
@@ -265,10 +270,9 @@ axes8[1].plot(poa.fitness_history, linewidth=2, color="tab:blue")
 axes8[1].plot(np.argmin(poa.fitness_history), np.min(poa.fitness_history), "bo")
 axes8[1].set_title("POA Convergence")
 axes8[1].set_xlabel("Iterations")
-axes8[1].set_ylabel("Fitness (Huber loss)")
 axes8[1].grid(True, alpha=0.5)
 
-# [3] Hybrid
+# [2] Hybrid
 axes8[2].plot(hyb.fitness_history, linewidth=2, color="tab:orange")
 axes8[2].axvline(hyb.split_iter, color="k", linestyle="--", linewidth=1, label=f"Switch at iter {hyb.split_iter}")
 axes8[2].plot(np.argmin(hyb.fitness_history), np.min(hyb.fitness_history), "ro")
@@ -276,6 +280,9 @@ axes8[2].set_title("Hybrid POA-PSO Convergence")
 axes8[2].set_xlabel("Iterations")
 axes8[2].legend()
 axes8[2].grid(True, alpha=0.5)
+
+for ax in axes8:
+    ax.set_ylim(y_min - y_margin, y_max + y_margin)
 
 plt.tight_layout()
 plt.show()
