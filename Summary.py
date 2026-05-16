@@ -1,413 +1,344 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
 import pandas as pd
+import io
+import requests
 
 # ============================================================
-# Load Data
+# ส่วนที่ 1: Load Dataset (ดึงจาก Google Sheets)
 # ============================================================
-df = pd.read_csv("D:\GitHub\Project\Distance(CM) - SensorData.csv")
-df.columns = df.columns.str.strip()
-df = df.sort_values("Index").reset_index(drop=True)
+SHEET_NAME = "SensorData"
+SHEET_ID = "169b1I4Gos8UhkzDkxH6uX9ty3yaQ_8kCqRGjqnpb0dU"
+GID = "1511238558"
+sheet_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={GID}"
 
+try:
+    print(f"[INFO] กำลังดึงข้อมูลจากชีต: {SHEET_NAME}...")
+    response = requests.get(sheet_url, timeout=20)
+    response.raise_for_status()
+
+    df = pd.read_csv(io.StringIO(response.content.decode("utf-8")))
+    df.columns = df.columns.str.strip()
+
+    required_cols = ["Measured (cm)", "Desired (cm)", "Index"]
+    for col in required_cols:
+        if col not in df.columns:
+            raise KeyError(f"ไม่พบคอลัมน์: {col}")
+
+    df = df.sort_values(by="Index").reset_index(drop=True)
+    print(f"[SUCCESS] โหลดข้อมูลสำเร็จทั้งหมด {len(df)} แถว")
+
+except Exception as e:
+    print(f"[ERROR] ไม่สามารถโหลดข้อมูลได้: {e}")
+    df = pd.DataFrame()
+
+if len(df) == 0:
+    print("[ERROR] ไม่มีข้อมูลสำหรับรันอัลกอริทึม")
+    raise SystemExit(1)
+
+np.random.seed(42)
 measured_all = df["Measured (cm)"].astype(float).values
 desired_all  = df["Desired (cm)"].astype(float).values
+raw_error = measured_all - desired_all
+n_samples    = len(measured_all)
 
 # ============================================================
-# Huber Loss + Fitness Function
+# ส่วนที่ 2: คลาสของอัลกอริทึมทั้ง 3 ตัว
 # ============================================================
-def huber(r, delta=6.0):
-    absr = np.abs(r)
-    return np.where(absr <= delta, 0.5 * r**2, delta * (absr - 0.5 * delta)).mean()
 
-def fitness_fn(w, measured, desired):
-    a, b, c = w
-    pred = a * measured**2 + b * measured + c
-    return huber(pred - desired)
+# 1. PSO Class
+class PSO_Calibration:
+    def __init__(self, measured, desired, n=50, m=3, T=200, w=0.7298, c1=1.49618, c2=1.49618, huber_delta=6.0):
+        self.measured, self.desired = measured, desired
+        self.n, self.m, self.T = n, m, T
+        self.w, self.c1, self.c2 = w, c1, c2
+        self.huber_delta = huber_delta
+        self.fitness_history = []
+        self.lb = np.array([-0.0003,  0.90, -5.0])
+        self.ub = np.array([ 0.0003,  1.20, 12.0])
+        self.v_max = 0.2 * (self.ub - self.lb)
 
-lb = np.array([-0.0003,  0.90, -5.0])
-ub = np.array([ 0.0003,  1.20, 12.0])
+    def _huber(self, r):
+        d = self.huber_delta
+        absr = np.abs(r)
+        quad = 0.5 * r ** 2
+        lin  = d * (absr - 0.5 * d)
+        return np.where(absr <= d, quad, lin).mean()
+
+    def fitness_function(self, w):
+        a, b, c = w
+        pred = a * self.measured ** 2 + b * self.measured + c
+        return self._huber(pred - self.desired)
+
+    def run(self):
+        X = self.lb + np.random.rand(self.n, self.m) * (self.ub - self.lb)
+        V = np.random.uniform(-self.v_max, self.v_max, (self.n, self.m))
+        pbest = X.copy()
+        pbest_fit = np.array([self.fitness_function(p) for p in X])
+        g_idx = int(np.argmin(pbest_fit))
+        gbest = pbest[g_idx].copy()
+        gbest_fit = float(pbest_fit[g_idx])
+        self.fitness_history = [gbest_fit]
+
+        for t in range(1, self.T + 1):
+            for i in range(self.n):
+                r1, r2 = np.random.rand(self.m), np.random.rand(self.m)
+                V[i] = self.w * V[i] + self.c1 * r1 * (pbest[i] - X[i]) + self.c2 * r2 * (gbest - X[i])
+                V[i] = np.clip(V[i], -self.v_max, self.v_max)
+                X[i] = np.clip(X[i] + V[i], self.lb, self.ub)
+                fit_curr = self.fitness_function(X[i])
+                if fit_curr < pbest_fit[i]:
+                    pbest[i], pbest_fit[i] = X[i].copy(), fit_curr
+                    if fit_curr < gbest_fit:
+                        gbest, gbest_fit = X[i].copy(), float(fit_curr)
+            self.fitness_history.append(gbest_fit)
+        return gbest
+# 2. POA Class
+class POA_Calibration:
+    def __init__(self, measured, desired, n=50, m=3, T=200, R=0.2, huber_delta=6.0):
+        self.measured, self.desired = measured, desired
+        self.n, self.m, self.T, self.R = n, m, T, R
+        self.huber_delta = huber_delta
+        self.fitness_history = []
+        self.lb = np.array([-0.0003,  0.90, -5.0])
+        self.ub = np.array([ 0.0003,  1.20, 12.0])
+
+    def _huber(self, r):
+        d = self.huber_delta
+        absr = np.abs(r)
+        quad = 0.5 * r ** 2
+        lin  = d * (absr - 0.5 * d)
+        return np.where(absr <= d, quad, lin).mean()
+
+    def fitness_function(self, w):
+        a, b, c = w
+        pred = a * self.measured ** 2 + b * self.measured + c
+        return self._huber(pred - self.desired)
+
+    def run(self):
+        X = self.lb + np.random.rand(self.n, self.m) * (self.ub - self.lb)
+        F = np.array([self.fitness_function(s) for s in X])
+        self.best_fitness = float(np.min(F))
+        self.best_solution = X[np.argmin(F)].copy()
+        self.fitness_history = [self.best_fitness]
+
+        for t in range(1, self.T + 1):
+            prey = self.lb + np.random.rand(self.m) * (self.ub - self.lb)
+            f_prey = self.fitness_function(prey)
+            for i in range(self.n):
+                I = np.random.choice([1, 2])
+                if f_prey < F[i]: X_p1 = X[i] + np.random.rand(self.m) * (prey - I * X[i])
+                else:             X_p1 = X[i] + np.random.rand(self.m) * (X[i] - prey)
+                X_p1 = np.clip(X_p1, self.lb, self.ub)
+                f_p1 = self.fitness_function(X_p1)
+                if f_p1 < F[i]: X[i], F[i] = X_p1, f_p1
+
+                radius = self.R * (1 - t / self.T)
+                X_p2 = X[i] + radius * (2 * np.random.rand(self.m) - 1) * (self.ub - self.lb)
+                X_p2 = np.clip(X_p2, self.lb, self.ub)
+                f_p2 = self.fitness_function(X_p2)
+                if f_p2 < F[i]: X[i], F[i] = X_p2, f_p2
+
+            cur = float(np.min(F))
+            if cur < self.best_fitness:
+                self.best_fitness = cur
+                self.best_solution = X[np.argmin(F)].copy()
+            self.fitness_history.append(self.best_fitness)
+        return self.best_solution
+    
+# 3. Hybrid Class
+class Hybrid_POA_PSO:
+    def __init__(self, measured, desired, n=50, m=3, T_poa=150, T_pso=50, R=0.2, w=0.7298, c1=1.49618, c2=1.49618, huber_delta=6.0):
+        self.measured, self.desired = measured, desired
+        self.n, self.m = n, m
+        self.T_poa, self.T_pso = T_poa, T_pso
+        self.R, self.w, self.c1, self.c2 = R, w, c1, c2
+        self.huber_delta = huber_delta
+        self.fitness_history = []
+        self.lb = np.array([-0.0003,  0.90, -5.0])
+        self.ub = np.array([ 0.0003,  1.20, 12.0])
+        self.v_max = 0.2 * (self.ub - self.lb)
+
+    def _huber(self, r):
+        d = self.huber_delta
+        absr = np.abs(r)
+        quad = 0.5 * r ** 2
+        lin  = d * (absr - 0.5 * d)
+        return np.where(absr <= d, quad, lin).mean()
+
+    def fitness_function(self, w):
+        a, b, c = w
+        pred = a * self.measured ** 2 + b * self.measured + c
+        return self._huber(pred - self.desired)
+
+    def _run_poa(self, X):
+        F = np.array([self.fitness_function(s) for s in X])
+        best_fitness, best_solution = float(np.min(F)), X[np.argmin(F)].copy()
+        self.fitness_history.append(best_fitness)
+        for t in range(1, self.T_poa + 1):
+            prey = self.lb + np.random.rand(self.m) * (self.ub - self.lb)
+            f_prey = self.fitness_function(prey)
+            for i in range(self.n):
+                I = np.random.choice([1, 2])
+                if f_prey < F[i]: X_p1 = X[i] + np.random.rand(self.m) * (prey - I * X[i])
+                else:             X_p1 = X[i] + np.random.rand(self.m) * (X[i] - prey)
+                X_p1 = np.clip(X_p1, self.lb, self.ub)
+                f_p1 = self.fitness_function(X_p1)
+                if f_p1 < F[i]: X[i], F[i] = X_p1, f_p1
+
+                radius = self.R * (1 - t / self.T_poa)
+                X_p2 = X[i] + radius * (2 * np.random.rand(self.m) - 1) * (self.ub - self.lb)
+                X_p2 = np.clip(X_p2, self.lb, self.ub)
+                f_p2 = self.fitness_function(X_p2)
+                if f_p2 < F[i]: X[i], F[i] = X_p2, f_p2
+
+            cur = float(np.min(F))
+            if cur < best_fitness: best_fitness, best_solution = cur, X[np.argmin(F)].copy()
+            self.fitness_history.append(best_fitness)
+        return X, F, best_solution, best_fitness
+
+    def _run_pso(self, X, F, gbest, gbest_fit):
+        V = np.random.uniform(-0.1 * self.v_max, 0.1 * self.v_max, (self.n, self.m))
+        pbest, pbest_fit = X.copy(), F.copy()
+        for t in range(1, self.T_pso + 1):
+            for i in range(self.n):
+                r1, r2 = np.random.rand(self.m), np.random.rand(self.m)
+                V[i] = self.w * V[i] + self.c1 * r1 * (pbest[i] - X[i]) + self.c2 * r2 * (gbest - X[i])
+                V[i] = np.clip(V[i], -self.v_max, self.v_max)
+                X[i] = np.clip(X[i] + V[i], self.lb, self.ub)
+                fit_curr = self.fitness_function(X[i])
+                if fit_curr < pbest_fit[i]:
+                    pbest[i], pbest_fit[i] = X[i].copy(), fit_curr
+                    if fit_curr < gbest_fit: gbest, gbest_fit = X[i].copy(), float(fit_curr)
+            self.fitness_history.append(gbest_fit)
+        return gbest
+
+    def run(self):
+        self.fitness_history = []
+        X = self.lb + np.random.rand(self.n, self.m) * (self.ub - self.lb)
+        X_after_poa, F_after_poa, gbest, gbest_fit = self._run_poa(X)
+        best_sol = self._run_pso(X_after_poa.copy(), F_after_poa.copy(), gbest.copy(), gbest_fit)
+        self.split_iter = self.T_poa + 1
+        return best_sol
 
 # ============================================================
-# POA
+# ส่วนที่ 3: รันโปรแกรมและรวบรวมค่า
 # ============================================================
-def run_poa(measured, desired, n=50, m=3, T=200, R=0.2, seed=42):
-    np.random.seed(seed)
-    X = lb + np.random.rand(n, m) * (ub - lb)
-    F = np.array([fitness_fn(s, measured, desired) for s in X])
-    bf = float(np.min(F)); bs = X[np.argmin(F)].copy()
-    history = [bf]
-    for t in range(1, T + 1):
-        prey = lb + np.random.rand(m) * (ub - lb)
-        fp   = fitness_fn(prey, measured, desired)
-        for i in range(n):
-            I  = np.random.choice([1, 2])
-            X1 = X[i] + np.random.rand(m) * (prey - I * X[i]) if fp < F[i] \
-                 else X[i] + np.random.rand(m) * (X[i] - prey)
-            X1 = np.clip(X1, lb, ub)
-            f1 = fitness_fn(X1, measured, desired)
-            if f1 < F[i]: X[i], F[i] = X1, f1
-            r  = R * (1 - t / T)
-            X2 = np.clip(X[i] + r * (2 * np.random.rand(m) - 1) * (ub - lb), lb, ub)
-            f2 = fitness_fn(X2, measured, desired)
-            if f2 < F[i]: X[i], F[i] = X2, f2
-        cur = float(np.min(F))
-        if cur < bf: bf = cur; bs = X[np.argmin(F)].copy()
-        history.append(bf)
-    return bs, history
+print("[INFO] รัน PSO...")
+pso = PSO_Calibration(measured_all, desired_all)
+best_pso = pso.run()
+corrected_pso = best_pso[0] * measured_all**2 + best_pso[1] * measured_all + best_pso[2]
+residual_pso = corrected_pso - desired_all
+
+print("\n[INFO] รัน POA...")
+poa = POA_Calibration(measured_all, desired_all)
+best_poa = poa.run()
+corrected_poa = best_poa[0] * measured_all**2 + best_poa[1] * measured_all + best_poa[2]
+residual_poa = corrected_poa - desired_all
+
+print("[INFO] รัน Hybrid POA-PSO...")
+hyb = Hybrid_POA_PSO(measured_all, desired_all)
+best_hyb = hyb.run()
+corrected_hyb = best_hyb[0] * measured_all**2 + best_hyb[1] * measured_all + best_hyb[2]
+residual_hyb = corrected_hyb - desired_all
 
 # ============================================================
-# PSO
+# ส่วนที่ 4: พล็อตกราฟเปรียบเทียบแบบ Subplots (แยก 3 กราฟย่อยใน 1 รูป)
 # ============================================================
-def run_pso(measured, desired, n=50, m=3, T=200,
-            w=0.7298, c1=1.49618, c2=1.49618, seed=42,
-            X_init=None, F_init=None, v_scale=1.0):
-    np.random.seed(seed)
-    vmax = 0.2 * (ub - lb)
-    X    = (lb + np.random.rand(n, m) * (ub - lb)) if X_init is None else X_init.copy()
-    V    = np.random.uniform(-v_scale * vmax, v_scale * vmax, (n, m))
-    pbest     = X.copy()
-    pbest_fit = F_init.copy() if F_init is not None else \
-                np.array([fitness_fn(p, measured, desired) for p in X])
-    g_idx     = int(np.argmin(pbest_fit))
-    gbest     = pbest[g_idx].copy(); gbest_fit = float(pbest_fit[g_idx])
-    history   = [gbest_fit]
-    for _ in range(1, T + 1):
-        for i in range(n):
-            r1, r2 = np.random.rand(m), np.random.rand(m)
-            V[i]   = w * V[i] + c1 * r1 * (pbest[i] - X[i]) + c2 * r2 * (gbest - X[i])
-            V[i]   = np.clip(V[i], -vmax, vmax)
-            X[i]   = np.clip(X[i] + V[i], lb, ub)
-            fc     = fitness_fn(X[i], measured, desired)
-            if fc < pbest_fit[i]:
-                pbest[i] = X[i].copy(); pbest_fit[i] = fc
-                if fc < gbest_fit: gbest = X[i].copy(); gbest_fit = float(fc)
-        history.append(gbest_fit)
-    return gbest, history
+pop_idx = np.arange(1, n_samples + 1)
 
-# ============================================================
-# Hybrid POA -> PSO
-# ============================================================
-def run_hybrid(measured, desired, n=50, m=3,
-               T_poa=150, T_pso=50, R=0.2,
-               w=0.7298, c1=1.49618, c2=1.49618, seed=42):
-    np.random.seed(seed)
-    vmax = 0.2 * (ub - lb)
-    # Phase A: POA
-    X = lb + np.random.rand(n, m) * (ub - lb)
-    F = np.array([fitness_fn(s, measured, desired) for s in X])
-    bf = float(np.min(F)); bs = X[np.argmin(F)].copy()
-    history = [bf]
-    for t in range(1, T_poa + 1):
-        prey = lb + np.random.rand(m) * (ub - lb)
-        fp   = fitness_fn(prey, measured, desired)
-        for i in range(n):
-            I  = np.random.choice([1, 2])
-            X1 = X[i] + np.random.rand(m) * (prey - I * X[i]) if fp < F[i] \
-                 else X[i] + np.random.rand(m) * (X[i] - prey)
-            X1 = np.clip(X1, lb, ub)
-            f1 = fitness_fn(X1, measured, desired)
-            if f1 < F[i]: X[i], F[i] = X1, f1
-            r  = R * (1 - t / T_poa)
-            X2 = np.clip(X[i] + r * (2 * np.random.rand(m) - 1) * (ub - lb), lb, ub)
-            f2 = fitness_fn(X2, measured, desired)
-            if f2 < F[i]: X[i], F[i] = X2, f2
-        cur = float(np.min(F))
-        if cur < bf: bf = cur; bs = X[np.argmin(F)].copy()
-        history.append(bf)
-    # Phase B: PSO (low initial velocity)
-    V = np.random.uniform(-0.1 * vmax, 0.1 * vmax, (n, m))
-    pbest = X.copy(); pbest_fit = F.copy()
-    gbest = bs.copy(); gbest_fit = bf
-    for _ in range(1, T_pso + 1):
-        for i in range(n):
-            r1, r2 = np.random.rand(m), np.random.rand(m)
-            V[i]   = w * V[i] + c1 * r1 * (pbest[i] - X[i]) + c2 * r2 * (gbest - X[i])
-            V[i]   = np.clip(V[i], -vmax, vmax)
-            X[i]   = np.clip(X[i] + V[i], lb, ub)
-            fc     = fitness_fn(X[i], measured, desired)
-            if fc < pbest_fit[i]:
-                pbest[i] = X[i].copy(); pbest_fit[i] = fc
-                if fc < gbest_fit: gbest = X[i].copy(); gbest_fit = float(fc)
-        history.append(gbest_fit)
-    return gbest, history
+# --------------------------------------------------------
+# Figure 8: Convergence (Subplots: POA, PSO, Hybrid)
+# --------------------------------------------------------
+fig8, axes8 = plt.subplots(1, 3, figsize=(15, 5))
+fig8.suptitle("Convergence Performance", fontsize=16, fontweight='bold')
 
-# ============================================================
-# Run 3 Algorithms
-# ============================================================
-print("Running POA ...")
-poa_w,  _ = run_poa(measured_all, desired_all, seed=42)
+# [2] PSO
+axes8[0].plot(pso.fitness_history, linewidth=2, color="tab:green")
+axes8[0].plot(np.argmin(pso.fitness_history), np.min(pso.fitness_history), "go")
+axes8[0].set_title("PSO Convergence")
+axes8[0].set_xlabel("Iterations")
+axes8[0].grid(True, alpha=0.5)
 
-print("Running PSO ...")
-pso_w,  _ = run_pso(measured_all, desired_all, seed=42)
+# [1] POA
+axes8[1].plot(poa.fitness_history, linewidth=2, color="tab:blue")
+axes8[1].plot(np.argmin(poa.fitness_history), np.min(poa.fitness_history), "bo")
+axes8[1].set_title("POA Convergence")
+axes8[1].set_xlabel("Iterations")
+axes8[1].set_ylabel("Fitness (Huber loss)")
+axes8[1].grid(True, alpha=0.5)
 
-print("Running Hybrid POA-PSO ...")
-hyb_w,  _ = run_hybrid(measured_all, desired_all, seed=42)
-
-def calibrate(w, m):
-    a, b, c = w
-    return a * m**2 + b * m + c
-
-corr_poa = calibrate(poa_w, measured_all)
-corr_pso = calibrate(pso_w, measured_all)
-corr_hyb = calibrate(hyb_w, measured_all)
-
-raw_err  = np.abs(measured_all - desired_all)
-err_poa  = np.abs(corr_poa - desired_all)
-err_pso  = np.abs(corr_pso - desired_all)
-err_hyb  = np.abs(corr_hyb - desired_all)
-
-# ============================================================
-# Range-based Analysis
-# ============================================================
-ranges       = [(20, 100), (100, 200), (200, 300), (300, 400)]
-range_labels = ["20–100 cm", "100–200 cm", "200–300 cm", "300–400 cm"]
-colors       = {"Raw": "#d62728", "POA": "#1f77b4", "PSO": "#2ca02c", "Hybrid POA-PSO": "#ff7f0e"}
-
-stats = []
-for (lo, hi), label in zip(ranges, range_labels):
-    mask = (desired_all >= lo) & (desired_all <= hi)
-    stats.append({
-        "label":    label,
-        "n":        int(mask.sum()),
-        "raw_mae":  float(np.mean(raw_err[mask])),
-        "poa_mae":  float(np.mean(err_poa[mask])),
-        "pso_mae":  float(np.mean(err_pso[mask])),
-        "hyb_mae":  float(np.mean(err_hyb[mask])),
-        "raw_rmse": float(np.sqrt(np.mean((measured_all[mask] - desired_all[mask])**2))),
-        "poa_rmse": float(np.sqrt(np.mean((corr_poa[mask] - desired_all[mask])**2))),
-        "pso_rmse": float(np.sqrt(np.mean((corr_pso[mask] - desired_all[mask])**2))),
-        "hyb_rmse": float(np.sqrt(np.mean((corr_hyb[mask] - desired_all[mask])**2))),
-        "mask":     mask,
-    })
-
-# ============================================================
-# Figure 1: MAE & RMSE Bar Chart per Range
-# ============================================================
-fig, axes = plt.subplots(1, 2, figsize=(14, 5.5))
-fig.suptitle("Error Analysis by Distance Range\n"
-             "HC-SR04 Ultrasonic Sensor — POA / PSO / Hybrid POA-PSO",
-             fontsize=13, fontweight="bold", y=1.02)
-
-x     = np.arange(len(ranges))
-width = 0.18
-algo_keys = [("Raw (Before Calibration)", "raw_mae", "#d62728"),
-             ("POA",                      "poa_mae", "#1f77b4"),
-             ("PSO",                      "pso_mae", "#2ca02c"),
-             ("Hybrid POA-PSO",           "hyb_mae", "#ff7f0e")]
-
-ax = axes[0]
-for k, (label, key, color) in enumerate(algo_keys):
-    vals = [s[key] for s in stats]
-    bars = ax.bar(x + (k - 1.5) * width, vals, width, label=label,
-                  color=color, alpha=0.85, edgecolor="white", linewidth=0.5)
-    for bar, v in zip(bars, vals):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.1,
-                f"{v:.2f}", ha="center", va="bottom", fontsize=7.5, color=color)
-
-ax.set_xlabel("Distance Range", fontsize=11)
-ax.set_ylabel("MAE (cm)", fontsize=11)
-ax.set_title("Mean Absolute Error (MAE) by Distance Range", fontsize=11)
-ax.set_xticks(x)
-ax.set_xticklabels(range_labels, fontsize=10)
-ax.legend(fontsize=9)
-ax.grid(axis="y", alpha=0.3)
-ax.set_ylim(0, max(s["raw_mae"] for s in stats) * 1.25)
-
-algo_rmse = [("Raw (Before Calibration)", "raw_rmse", "#d62728"),
-             ("POA",                      "poa_rmse", "#1f77b4"),
-             ("PSO",                      "pso_rmse", "#2ca02c"),
-             ("Hybrid POA-PSO",           "hyb_rmse", "#ff7f0e")]
-
-ax2 = axes[1]
-for k, (label, key, color) in enumerate(algo_rmse):
-    vals = [s[key] for s in stats]
-    bars = ax2.bar(x + (k - 1.5) * width, vals, width, label=label,
-                   color=color, alpha=0.85, edgecolor="white", linewidth=0.5)
-    for bar, v in zip(bars, vals):
-        ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.1,
-                 f"{v:.2f}", ha="center", va="bottom", fontsize=7.5, color=color)
-
-ax2.set_xlabel("Distance Range", fontsize=11)
-ax2.set_ylabel("RMSE (cm)", fontsize=11)
-ax2.set_title("Root Mean Square Error (RMSE) by Distance Range", fontsize=11)
-ax2.set_xticks(x)
-ax2.set_xticklabels(range_labels, fontsize=10)
-ax2.legend(fontsize=9)
-ax2.grid(axis="y", alpha=0.3)
-ax2.set_ylim(0, max(s["raw_rmse"] for s in stats) * 1.25)
+# [3] Hybrid
+axes8[2].plot(hyb.fitness_history, linewidth=2, color="tab:orange")
+axes8[2].axvline(hyb.split_iter, color="k", linestyle="--", linewidth=1, label=f"Switch at iter {hyb.split_iter}")
+axes8[2].plot(np.argmin(hyb.fitness_history), np.min(hyb.fitness_history), "ro")
+axes8[2].set_title("Hybrid POA-PSO Convergence")
+axes8[2].set_xlabel("Iterations")
+axes8[2].legend()
+axes8[2].grid(True, alpha=0.5)
 
 plt.tight_layout()
 plt.show()
 
-# ============================================================
-# Figure 2: % MAE Reduction Bar Chart
-# ============================================================
-fig, ax = plt.subplots(figsize=(10, 5))
+# --------------------------------------------------------
+# Figure 9: Desired vs Optimized (Subplots: POA, PSO, Hybrid)
+# --------------------------------------------------------
+# ใช้ sharey=True เพื่อให้แกน Y ของทั้ง 3 กราฟมีสเกลเท่ากันเป๊ะ
+fig9, axes9 = plt.subplots(1, 3, figsize=(16, 6), sharey=True)
+fig9.suptitle("Desired vs Optimized Distances", fontsize=16, fontweight='bold')
 
-algo_red = [("POA",            "poa_mae", "#1f77b4"),
-            ("PSO",            "pso_mae", "#2ca02c"),
-            ("Hybrid POA-PSO", "hyb_mae", "#ff7f0e")]
-width2 = 0.22
+algorithms_9 = [
+    ("PSO", corrected_pso, "g*"), 
+    ("POA", corrected_poa, "b*"),
+    ("Hybrid POA-PSO", corrected_hyb, "darkorange")
+]
 
-for k, (label, key, color) in enumerate(algo_red):
-    reductions = [(1 - s[key] / s["raw_mae"]) * 100 for s in stats]
-    bars = ax.bar(x + (k - 1) * width2, reductions, width2,
-                  label=label, color=color, alpha=0.85, edgecolor="white")
-    for bar, v in zip(bars, reductions):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.4,
-                f"{v:.1f}%", ha="center", va="bottom", fontsize=9,
-                color=color, fontweight="bold")
-
-ax.axhline(0, color="k", linewidth=0.8)
-ax.set_xlabel("Distance Range", fontsize=11)
-ax.set_ylabel("MAE Reduction (%)", fontsize=11)
-ax.set_title("MAE Reduction (%) by Distance Range\n"
-             "Compared to Raw (Before Calibration)", fontsize=11)
-ax.set_xticks(x)
-ax.set_xticklabels(range_labels, fontsize=11)
-ax.legend(fontsize=10)
-ax.grid(axis="y", alpha=0.3)
-ax.set_ylim(0, 105)
-
-plt.tight_layout()
-plt.show()
-
-# ============================================================
-# Figure 3: Scatter Error per Data Point (4 subplots by range)
-# ============================================================
-fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-fig.suptitle("Error Before and After Calibration by Distance Range\n"
-             "(Each point = 1 measurement)",
-             fontsize=13, fontweight="bold")
-
-for idx, (s, ax) in enumerate(zip(stats, axes.flat)):
-    mask        = s["mask"]
-    desired_sub = desired_all[mask]
-
-    ax.plot(desired_sub, measured_all[mask] - desired_all[mask],
-            "r.", markersize=5, alpha=0.55, label="Raw (Before Calibration)")
-    ax.plot(desired_sub, corr_poa[mask] - desired_all[mask],
-            "b.", markersize=5, alpha=0.55, label="POA")
-    ax.plot(desired_sub, corr_pso[mask] - desired_all[mask],
-            "g.", markersize=5, alpha=0.55, label="PSO")
-    ax.plot(desired_sub, corr_hyb[mask] - desired_all[mask],
-            color="#ff7f0e", marker=".", linestyle="None",
-            markersize=5, alpha=0.7, label="Hybrid POA-PSO")
-    ax.axhline(0, color="k", linewidth=0.8, linestyle="--")
-
-    mae_txt = (f"MAE:  Raw={s['raw_mae']:.2f}  "
-               f"POA={s['poa_mae']:.2f}  "
-               f"PSO={s['pso_mae']:.2f}  "
-               f"Hyb={s['hyb_mae']:.2f} cm")
-    ax.set_title(f"{s['label']}  (n={s['n']})\n{mae_txt}", fontsize=10)
-    ax.set_xlabel("True Distance (cm)", fontsize=10)
-    ax.set_ylabel("Error = Measured − True (cm)", fontsize=10)
-    ax.legend(fontsize=8, loc="lower left")
-    ax.grid(alpha=0.3)
+for i, (name, corrected_vals, color) in enumerate(algorithms_9):
+    axes9[i].plot(pop_idx, desired_all, "ro", markersize=5, markerfacecolor="none", label="Desired Distances")
+    
+    if name == "Hybrid POA-PSO":
+        axes9[i].plot(pop_idx, corrected_vals, color=color, marker="*", linestyle="None", markersize=5, label="Optimized")
+    else:
+        axes9[i].plot(pop_idx, corrected_vals, color, markersize=5, label="Optimized")
+        
+    axes9[i].set_title(name)
+    axes9[i].set_xlabel("Measured (cm)")
+    if i == 0: axes9[i].set_ylabel("Distances (cm)")
+    axes9[i].set_xlim(0, max(450, n_samples + 20))
+    axes9[i].set_ylim(0, max(desired_all) + 20)
+    axes9[i].legend(loc="upper left")
+    axes9[i].grid(True, alpha=0.4)
 
 plt.tight_layout()
 plt.show()
 
-# ============================================================
-# Figure 4: Box Plot of |Error| per Range
-# ============================================================
-fig, axes = plt.subplots(1, 4, figsize=(16, 5.5), sharey=False)
-fig.suptitle("Distribution of |Error| by Distance Range\n"
-             "(Box plot — center line = median, box = Q1–Q3)",
-             fontsize=13, fontweight="bold")
+# --------------------------------------------------------
+# Figure 10: Error Before vs After (Subplots: POA, PSO, Hybrid)
+# --------------------------------------------------------
+# ใช้ sharey=True เพื่อให้เปรียบเทียบช่วง Error ได้ชัดเจน
+fig10, axes10 = plt.subplots(1, 3, figsize=(16, 6), sharey=True)
+fig10.suptitle("Error Before vs After Optimization", fontsize=16, fontweight='bold')
 
-for idx, (s, ax) in enumerate(zip(stats, axes)):
-    mask   = s["mask"]
-    data   = [raw_err[mask], err_poa[mask], err_pso[mask], err_hyb[mask]]
-    labels = ["Raw", "POA", "PSO", "Hybrid"]
-    clrs   = ["#d62728", "#1f77b4", "#2ca02c", "#ff7f0e"]
+algorithms_10 = [
+    ("PSO", residual_pso, "g."),
+    ("POA", residual_poa, "b."),
+    ("Hybrid POA-PSO", residual_hyb, "darkorange")
+]
 
-    bp = ax.boxplot(data, patch_artist=True, widths=0.5,
-                    medianprops=dict(color="white", linewidth=2),
-                    whiskerprops=dict(linewidth=1.2),
-                    capprops=dict(linewidth=1.2),
-                    flierprops=dict(marker="o", markersize=3, alpha=0.4))
-    for patch, color in zip(bp["boxes"], clrs):
-        patch.set_facecolor(color)
-        patch.set_alpha(0.75)
-    for whisker, color in zip(bp["whiskers"], [c for c in clrs for _ in range(2)]):
-        whisker.set_color(color)
-    for cap, color in zip(bp["caps"], [c for c in clrs for _ in range(2)]):
-        cap.set_color(color)
-    for flier, color in zip(bp["fliers"], clrs):
-        flier.set_markerfacecolor(color)
-        flier.set_markeredgecolor(color)
-
-    ax.set_xticklabels(labels, fontsize=10)
-    ax.set_title(s["label"], fontsize=11)
-    ax.set_ylabel("|Error| (cm)" if idx == 0 else "", fontsize=10)
-    ax.grid(axis="y", alpha=0.3)
+for i, (name, resid_vals, color) in enumerate(algorithms_10):
+    axes10[i].plot(pop_idx, raw_error, "r.", markersize=4, alpha=0.6, label="Error Before")
+    
+    if name == "Hybrid POA-PSO":
+        axes10[i].plot(pop_idx, resid_vals, color=color, marker=".", linestyle="None", markersize=4, alpha=0.9, label="Error After")
+    else:
+        axes10[i].plot(pop_idx, resid_vals, color, markersize=4, alpha=0.8, label="Error After")
+        
+    axes10[i].axhline(0, color="k", linewidth=0.8)
+    axes10[i].set_title(name)
+    axes10[i].set_xlabel("Measured (cm)")
+    if i == 0: axes10[i].set_ylabel("Error (cm)")
+    axes10[i].legend()
+    axes10[i].grid(True, alpha=0.4)
 
 plt.tight_layout()
 plt.show()
-
-# ============================================================
-# Figure 5: Summary Table
-# ============================================================
-fig, ax = plt.subplots(figsize=(13, 4))
-ax.axis("off")
-
-col_labels = ["Distance Range", "n",
-              "Raw MAE", "POA MAE", "PSO MAE", "Hybrid MAE",
-              "POA Red.", "PSO Red.", "Hybrid Red.",
-              "Hybrid RMSE"]
-rows = []
-for s in stats:
-    red_poa = (1 - s["poa_mae"] / s["raw_mae"]) * 100
-    red_pso = (1 - s["pso_mae"] / s["raw_mae"]) * 100
-    red_hyb = (1 - s["hyb_mae"] / s["raw_mae"]) * 100
-    rows.append([
-        s["label"], str(s["n"]),
-        f"{s['raw_mae']:.2f}", f"{s['poa_mae']:.2f}",
-        f"{s['pso_mae']:.2f}", f"{s['hyb_mae']:.2f}",
-        f"{red_poa:.1f}%", f"{red_pso:.1f}%", f"{red_hyb:.1f}%",
-        f"{s['hyb_rmse']:.2f}",
-    ])
-
-overall_red_poa = (1 - np.mean(err_poa) / np.mean(raw_err)) * 100
-overall_red_pso = (1 - np.mean(err_pso) / np.mean(raw_err)) * 100
-overall_red_hyb = (1 - np.mean(err_hyb) / np.mean(raw_err)) * 100
-rows.append([
-    "Overall", str(len(desired_all)),
-    f"{np.mean(raw_err):.2f}", f"{np.mean(err_poa):.2f}",
-    f"{np.mean(err_pso):.2f}", f"{np.mean(err_hyb):.2f}",
-    f"{overall_red_poa:.1f}%", f"{overall_red_pso:.1f}%", f"{overall_red_hyb:.1f}%",
-    f"{np.sqrt(np.mean((corr_hyb - desired_all)**2)):.2f}",
-])
-
-table = ax.table(cellText=rows, colLabels=col_labels,
-                 loc="center", cellLoc="center")
-table.auto_set_font_size(False)
-table.set_fontsize(9.5)
-table.scale(1, 1.8)
-
-for j in range(len(col_labels)):
-    table[0, j].set_facecolor("#2c3e50")
-    table[0, j].set_text_props(color="white", fontweight="bold")
-
-for j in range(len(col_labels)):
-    table[len(rows), j].set_facecolor("#ecf0f1")
-    table[len(rows), j].set_text_props(fontweight="bold")
-
-for i in range(1, len(rows)):
-    table[i, 5].set_facecolor("#fff3cd")
-    table[i, 8].set_facecolor("#d4edda")
-
-ax.set_title("Summary Table: MAE and RMSE by Distance Range (unit: cm)",
-             fontsize=12, fontweight="bold", pad=20)
-
-plt.tight_layout()
-plt.show()
-
-print("\nDone!")
-print("  1. MAE & RMSE bar chart by distance range")
-print("  2. MAE reduction (%) bar chart by distance range")
-print("  3. Scatter plot of error by distance range (4 subplots)")
-print("  4. Box plot of |Error| by distance range")
-print("  5. Summary table")

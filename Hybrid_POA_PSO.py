@@ -263,7 +263,7 @@ if __name__ == "__main__":
     pop_idx = np.arange(1, n_samples + 1)
     plt.figure(figsize=(8, 6))
     plt.plot(pop_idx, desired_all, "ro", markersize=5,
-             markerfacecolor="none", label="Desired distances")
+             markerfacecolor="none", label="Desired Distances")
     plt.plot(pop_idx, corrected, color="darkorange", marker="*",
              linestyle="None", markersize=5,
              label="Optimized Measured Distances")
@@ -281,7 +281,7 @@ if __name__ == "__main__":
     # --------------------------------------------------------
     plt.figure(figsize=(8, 5))
     plt.plot(pop_idx, measured_all - desired_all, "r.",
-             markersize=4, alpha=0.6, label="Error before Optimization")
+             markersize=4, alpha=0.6, label="Error Before Optimization")
     plt.plot(pop_idx, residual, color="darkorange", marker=".",
              linestyle="None", markersize=4, alpha=0.6,
              label="Error After Optimization")
