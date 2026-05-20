@@ -225,23 +225,52 @@ class Hybrid_POA_PSO:
 # ส่วนที่ 3: รันโปรแกรมและรวบรวมค่า
 # ============================================================
 print("[INFO] รัน PSO...")
+np.random.seed(42)
 pso = PSO_Calibration(measured_all, desired_all)
 best_pso = pso.run()
 corrected_pso = best_pso[0] * measured_all**2 + best_pso[1] * measured_all + best_pso[2]
 residual_pso = corrected_pso - desired_all
 
 print("\n[INFO] รัน POA...")
+np.random.seed(42)
 poa = POA_Calibration(measured_all, desired_all)
 best_poa = poa.run()
 corrected_poa = best_poa[0] * measured_all**2 + best_poa[1] * measured_all + best_poa[2]
 residual_poa = corrected_poa - desired_all
 
 print("[INFO] รัน Hybrid POA-PSO...")
+np.random.seed(42)
 hyb = Hybrid_POA_PSO(measured_all, desired_all)
 best_hyb = hyb.run()
 corrected_hyb = best_hyb[0] * measured_all**2 + best_hyb[1] * measured_all + best_hyb[2]
 residual_hyb = corrected_hyb - desired_all
 
+def mae(x):
+    return np.mean(np.abs(x))
+
+def rmse(x):
+    return np.sqrt(np.mean(x ** 2))
+
+raw_mae = mae(raw_error)
+raw_rmse = rmse(raw_error)
+
+results = {
+    "Before Optimization": (raw_mae, raw_rmse),
+    "PSO": (mae(residual_pso), rmse(residual_pso)),
+    "POA": (mae(residual_poa), rmse(residual_poa)),
+    "Hybrid POA-PSO": (mae(residual_hyb), rmse(residual_hyb)),
+}
+
+print("\n=== Performance Comparison ===")
+print(f"{'Method':<25} {'MAE (cm)':>12} {'RMSE (cm)':>12} {'MAE Reduction (%)':>18}")
+
+for name, (m, r) in results.items():
+    if name == "Before Optimization":
+        reduction = 0
+    else:
+        reduction = (1 - m / raw_mae) * 100
+
+    print(f"{name:<25} {m:12.4f} {r:12.4f} {reduction:18.2f}")
 # ============================================================
 # ส่วนที่ 4: พล็อตกราฟเปรียบเทียบแบบ Subplots (แยก 3 กราฟย่อยใน 1 รูป)
 # ============================================================
