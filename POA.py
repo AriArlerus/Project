@@ -3,7 +3,9 @@ import matplotlib.pyplot as plt  # นำเข้า Matplotlib สำหรั
 import pandas as pd         # นำเข้า Pandas สำหรับจัดการข้อมูลในรูป DataFrame
 import io                   # นำเข้า io สำหรับแปลง bytes เป็น stream ที่ pandas อ่านได้
 import requests             # นำเข้า requests สำหรับส่ง HTTP request ดึงข้อมูลจากเว็บ
-
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.linear_model import HuberRegressor
+from sklearn.pipeline import make_pipeline
 # ============================================================
 # ส่วนที่ 1: Load Dataset (ดึงจาก Google Sheets)
 # ============================================================
@@ -148,6 +150,7 @@ if __name__ == "__main__":              # รันเฉพาะเมื่�
 
     measured_all = df["Measured (cm)"].astype(float).values  # ดึงคอลัมน์ค่าวัดเป็น float array
     desired_all  = df["Desired (cm)"].astype(float).values   # ดึงคอลัมน์ค่าอ้างอิงเป็น float array
+    raw_error = measured_all - desired_all
     n_samples    = len(measured_all)    # นับจำนวนจุดข้อมูลทั้งหมด
 
     # ----- รัน POA หาสมการชดเชย -----
@@ -219,18 +222,18 @@ if __name__ == "__main__":              # รันเฉพาะเมื่�
     plt.show()                                  # แสดง Figure 8
 
     # --------------------------------------------------------
-    # Figure 9: Desired vs Calibrated
+    # Figure 9: Desired vs Optimized
     # --------------------------------------------------------
     pop_idx = np.arange(1, n_samples + 1)       # สร้าง array [1, 2, ..., n_samples] สำหรับแกน x
     plt.figure(figsize=(8, 6))                  # สร้าง figure ขนาด 8x6 นิ้ว
     plt.plot(pop_idx, desired_all, "ro", markersize=5,
-             markerfacecolor="none", label="desired distances")
+             markerfacecolor="none", label="Desired Distances")
     # วาดจุดกลวงสีแดงแทนค่าอ้างอิง (desired)
     plt.plot(pop_idx, corrected, "b*", markersize=5,
-             label="calibrated measured distances")
+             label="Optimized Measured Distances")
     # วาดดาวสีน้ำเงินแทนค่า corrected หลัง calibration
     plt.xlabel("number of population")          # ตั้งชื่อแกน x
-    plt.ylabel("distances (cm)")                # ตั้งชื่อแกน y
+    plt.ylabel("Distances (cm)")                # ตั้งชื่อแกน y
     plt.xlim(0, max(450, n_samples + 20))       # กำหนดช่วงแกน x ให้กว้างอย่างน้อย 450
     plt.ylim(0, max(desired_all) + 20)          # กำหนดช่วงแกน y ตั้งแต่ 0 ถึงค่าสูงสุด+20
     plt.legend(loc="upper left")                # แสดง legend มุมบนซ้าย
@@ -243,14 +246,14 @@ if __name__ == "__main__":              # รันเฉพาะเมื่�
     # --------------------------------------------------------
     plt.figure(figsize=(8, 5))                  # สร้าง figure ขนาด 8x5 นิ้ว
     plt.plot(pop_idx, measured_all - desired_all, "r.",
-             markersize=4, alpha=0.6, label="error before calibration")
+             markersize=4, alpha=0.6, label="Error before Optimization")
     # วาดจุดสีแดงแทน error ก่อน calibration (measured - desired)
     plt.plot(pop_idx, residual, "b.",
-             markersize=4, alpha=0.6, label="error after calibration")
+             markersize=4, alpha=0.6, label="Error After Optimization")
     # วาดจุดสีน้ำเงินแทน residual หลัง calibration
     plt.axhline(0, color="k", linewidth=0.8)    # วาดเส้นแนวนอนที่ y=0 (เส้นอ้างอิง error=0)
     plt.xlabel("number of population")          # ตั้งชื่อแกน x
-    plt.ylabel("error (cm)")                    # ตั้งชื่อแกน y
+    plt.ylabel("Error (cm)")                    # ตั้งชื่อแกน y
     plt.grid(True, alpha=0.4)                   # เปิด grid โปร่งใส 40%
     plt.legend()                                # แสดง legend
     plt.tight_layout()                          # จัดพื้นที่กราฟให้พอดีอัตโนมัติ

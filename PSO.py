@@ -217,16 +217,16 @@ if __name__ == "__main__":              # รันเฉพาะเมื่�
     plt.show()                          # แสดงกราฟ
 
     # --------------------------------------------------------
-    # Figure 9: Desired vs Calibrated
+    # Figure 9: Desired vs Optimized
     # --------------------------------------------------------
     pop_idx = np.arange(1, n_samples + 1)  # สร้าง array ลำดับตัวอย่าง 1 ถึง n_samples
     plt.figure(figsize=(8, 6))          # สร้าง figure ขนาด 8x6 นิ้ว
     plt.plot(pop_idx, desired_all, "ro", markersize=5,
-             markerfacecolor="none", label="desired distances")  # วาดจุดวงกลมแดงสำหรับค่าจริง
+             markerfacecolor="none", label="Desired Distances")  # วาดจุดวงกลมแดงสำหรับค่าจริง
     plt.plot(pop_idx, corrected, "g*", markersize=5,
-             label="calibrated measured distances")  # วาดจุดดาวเขียวสำหรับค่าหลังคาลิเบรท
+             label="Optimized Measured Distances")  # วาดจุดดาวเขียวสำหรับค่าหลังคาลิเบรท
     plt.xlabel("number of population")  # ตั้งชื่อแกน x
-    plt.ylabel("distances (cm)")        # ตั้งชื่อแกน y
+    plt.ylabel("Distances (cm)")        # ตั้งชื่อแกน y
     plt.xlim(0, max(450, n_samples + 20))  # กำหนดช่วงแกน x อย่างน้อย 450 หรือมากกว่าจำนวนข้อมูล
     plt.ylim(0, max(desired_all) + 20)  # กำหนดช่วงแกน y ตั้งแต่ 0 ถึงค่าสูงสุด+20
     plt.legend(loc="upper left")        # แสดง legend มุมบนซ้าย
@@ -239,12 +239,12 @@ if __name__ == "__main__":              # รันเฉพาะเมื่�
     # --------------------------------------------------------
     plt.figure(figsize=(8, 5))          # สร้าง figure ขนาด 8x5 นิ้ว
     plt.plot(pop_idx, measured_all - desired_all, "r.",
-             markersize=4, alpha=0.6, label="error before calibration")  # วาดจุดแดงแสดง error ก่อนคาลิเบรท
+             markersize=4, alpha=0.6, label="Error Before Optimization")  # วาดจุดแดงแสดง error ก่อนคาลิเบรท
     plt.plot(pop_idx, residual, "g.",
-             markersize=4, alpha=0.6, label="error after calibration")   # วาดจุดเขียวแสดง error หลังคาลิเบรท
+             markersize=4, alpha=0.6, label="Error After Optimization")   # วาดจุดเขียวแสดง error หลังคาลิเบรท
     plt.axhline(0, color="k", linewidth=0.8)  # วาดเส้นแนวนอนที่ y=0 เป็นเส้นอ้างอิง
     plt.xlabel("number of population")  # ตั้งชื่อแกน x
-    plt.ylabel("error (cm)")            # ตั้งชื่อแกน y
+    plt.ylabel("Error (cm)")            # ตั้งชื่อแกน y
     plt.grid(True, alpha=0.4)           # แสดง grid โปร่งแสง 40%
     plt.legend()                        # แสดง legend ของกราฟ
     plt.tight_layout()                  # ปรับ layout ให้พอดีกรอบ

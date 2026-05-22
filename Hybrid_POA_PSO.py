@@ -288,19 +288,19 @@ if __name__ == "__main__":  # รันเฉพาะเมื่อเรี�
     plt.show()                               # แสดงกราฟ
 
     # --------------------------------------------------------
-    # Figure 9: Desired vs Calibrated
+    # Figure 9: Desired vs Optimized
     # --------------------------------------------------------
     pop_idx = np.arange(1, n_samples + 1)   # สร้าง array index 1 ถึง n_samples สำหรับแกน x
     plt.figure(figsize=(8, 6))              # สร้าง figure ขนาด 8x6 นิ้ว
     plt.plot(pop_idx, desired_all, "ro", markersize=5,
-             markerfacecolor="none", label="desired distances")
+             markerfacecolor="none", label="Desired distances")
     # วาดจุดสีแดง (วงกลมกลวง) แสดงค่า desired ทุก sample
     plt.plot(pop_idx, corrected, color="darkorange", marker="*",
              linestyle="None", markersize=5,
-             label="calibrated measured distances")
+             label="Optimized Measured Distances")
     # วาดจุดรูปดาวสีส้มแสดงค่าหลัง calibrate ทุก sample
     plt.xlabel("number of population")     # กำหนด label แกน x
-    plt.ylabel("distances (cm)")           # กำหนด label แกน y
+    plt.ylabel("Distances (cm)")           # กำหนด label แกน y
     plt.xlim(0, max(450, n_samples + 20))  # กำหนดช่วงแกน x (อย่างน้อย 450 หรือ n+20)
     plt.ylim(0, max(desired_all) + 20)     # กำหนดช่วงแกน y เหลือ margin 20 cm ด้านบน
     plt.legend(loc="upper left")           # แสดง legend มุมบนซ้าย
@@ -313,15 +313,15 @@ if __name__ == "__main__":  # รันเฉพาะเมื่อเรี�
     # --------------------------------------------------------
     plt.figure(figsize=(8, 5))             # สร้าง figure ขนาด 8x5 นิ้ว
     plt.plot(pop_idx, measured_all - desired_all, "r.",
-             markersize=4, alpha=0.6, label="error before calibration")
+             markersize=4, alpha=0.6, label="Error Before Optimization")
     # วาดจุดแดงแสดง error ก่อน calibrate (measured - desired) ทุก sample
     plt.plot(pop_idx, residual, color="darkorange", marker=".",
              linestyle="None", markersize=4, alpha=0.6,
-             label="error after calibration")
+             label="Error After Optimization")
     # วาดจุดสีส้มแสดง residual หลัง calibrate ทุก sample
     plt.axhline(0, color="k", linewidth=0.8)  # วาดเส้นแนวนอนที่ error = 0 เป็นเส้นอ้างอิง
     plt.xlabel("number of population")        # กำหนด label แกน x
-    plt.ylabel("error (cm)")                  # กำหนด label แกน y
+    plt.ylabel("Error (cm)")                  # กำหนด label แกน y
     plt.grid(True, alpha=0.4)                 # แสดง grid แบบ semi-transparent
     plt.legend()                              # แสดง legend
     plt.tight_layout()                        # จัดวาง layout อัตโนมัติ
