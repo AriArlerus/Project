@@ -46,7 +46,7 @@ def load_dataset():
 
 def plot_error_trend_before_optimization(measured_all, desired_all):
     # --------------------------------------------------------
-    # Figure 7: Error vs Measured (Before Optimization)
+    # Figure: Error vs Measured (Before Optimization)
     # Compare Ordinary Quadratic Trend vs Huber Quadratic Trend
     # --------------------------------------------------------
 
@@ -118,7 +118,7 @@ def plot_error_trend_before_optimization(measured_all, desired_all):
     plt.tight_layout()
     plt.show()
 
-    # ============================================================
+# ============================================================
 # ส่วนที่ 3: Main Program
 # ============================================================
 

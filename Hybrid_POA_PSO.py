@@ -265,7 +265,7 @@ if __name__ == "__main__":  # รันเฉพาะเมื่อเรี�
     print(f"RMSE หลังคาลิเบรท (inlier)    : {rmse_in:7.4f} cm")    # RMSE เฉพาะ inlier
 
     # --------------------------------------------------------
-    # Figure 8: Convergence
+    # Figure: Convergence
     # --------------------------------------------------------
     history = np.array(hyb.fitness_history)  # แปลง list fitness history เป็น numpy array
     plt.figure(figsize=(8, 5))               # สร้าง figure ขนาด 8x5 นิ้ว
@@ -288,7 +288,7 @@ if __name__ == "__main__":  # รันเฉพาะเมื่อเรี�
     plt.show()                               # แสดงกราฟ
 
     # --------------------------------------------------------
-    # Figure 9: Desired vs Optimized
+    # Figure: Desired vs Optimized
     # --------------------------------------------------------
     pop_idx = np.arange(1, n_samples + 1)   # สร้าง array index 1 ถึง n_samples สำหรับแกน x
     plt.figure(figsize=(8, 6))              # สร้าง figure ขนาด 8x6 นิ้ว
@@ -309,7 +309,7 @@ if __name__ == "__main__":  # รันเฉพาะเมื่อเรี�
     plt.show()                             # แสดงกราฟ
 
     # --------------------------------------------------------
-    # Figure 10: Error ก่อน vs หลังคาลิเบรท
+    # Figure: Error ก่อน vs หลังคาลิเบรท
     # --------------------------------------------------------
     plt.figure(figsize=(8, 5))             # สร้าง figure ขนาด 8x5 นิ้ว
     plt.plot(pop_idx, measured_all - desired_all, "r.",

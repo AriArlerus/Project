@@ -234,7 +234,7 @@ if __name__ == "__main__":
     print(f"RMSE หลังคาลิเบรท (inlier)    : {rmse_in:7.4f} cm")
 
     # --------------------------------------------------------
-    # Figure 8: Convergence (มีเส้นแบ่ง phase)
+    # Figure: Convergence (มีเส้นแบ่ง phase)
     # --------------------------------------------------------
     history = np.array(hyb.fitness_history)
     plt.figure(figsize=(8, 5))
@@ -254,7 +254,7 @@ if __name__ == "__main__":
     plt.show()
 
     # --------------------------------------------------------
-    # Figure 9: Desired vs Calibrated
+    # Figure: Desired vs Calibrated
     # --------------------------------------------------------
     pop_idx = np.arange(1, n_samples + 1)
     plt.figure(figsize=(8, 6))
@@ -272,7 +272,7 @@ if __name__ == "__main__":
     plt.show()
 
     # --------------------------------------------------------
-    # Figure 10: Error ก่อน vs หลังคาลิเบรท
+    # Figure: Error ก่อน vs หลังคาลิเบรท
     # --------------------------------------------------------
     plt.figure(figsize=(8, 5))
     plt.plot(pop_idx, measured_all - desired_all, "r.",

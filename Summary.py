@@ -277,7 +277,7 @@ for name, (m, r) in results.items():
 pop_idx = np.arange(1, n_samples + 1)
 
 # --------------------------------------------------------
-# Figure 8: Convergence (Subplots: POA, PSO, Hybrid)
+# Figure: Convergence (Subplots: POA, PSO, Hybrid)
 # --------------------------------------------------------
 fig8, axes8 = plt.subplots(1, 3, figsize=(15, 5))
 fig8.suptitle("Convergence Performance", fontsize=16, fontweight='bold')
@@ -317,7 +317,7 @@ plt.tight_layout()
 plt.show()
 
 # --------------------------------------------------------
-# Figure 9: Desired vs Optimized (Subplots: POA, PSO, Hybrid)
+# Figure: Desired vs Optimized (Subplots: POA, PSO, Hybrid)
 # --------------------------------------------------------
 # ใช้ sharey=True เพื่อให้แกน Y ของทั้ง 3 กราฟมีสเกลเท่ากันเป๊ะ
 fig9, axes9 = plt.subplots(1, 3, figsize=(16, 6), sharey=True)
@@ -349,7 +349,7 @@ plt.tight_layout()
 plt.show()
 
 # --------------------------------------------------------
-# Figure 10: Error Before vs After (Subplots: POA, PSO, Hybrid)
+# Figure: Error Before vs After (Subplots: POA, PSO, Hybrid)
 # --------------------------------------------------------
 # ใช้ sharey=True เพื่อให้เปรียบเทียบช่วง Error ได้ชัดเจน
 fig10, axes10 = plt.subplots(1, 3, figsize=(16, 6), sharey=True)
