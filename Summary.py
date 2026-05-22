@@ -338,7 +338,7 @@ for i, (name, corrected_vals, color) in enumerate(algorithms_9):
         axes9[i].plot(pop_idx, corrected_vals, color, markersize=5, label="Optimized")
         
     axes9[i].set_title(name)
-    axes9[i].set_xlabel("Measured (cm)")
+    axes9[i].set_xlabel("Population Index")
     if i == 0: axes9[i].set_ylabel("Distances (cm)")
     axes9[i].set_xlim(0, max(450, n_samples + 20))
     axes9[i].set_ylim(0, max(desired_all) + 20)
@@ -371,7 +371,7 @@ for i, (name, resid_vals, color) in enumerate(algorithms_10):
         
     axes10[i].axhline(0, color="k", linewidth=0.8)
     axes10[i].set_title(name)
-    axes10[i].set_xlabel("Measured (cm)")
+    axes10[i].set_xlabel("Population Index")
     if i == 0: axes10[i].set_ylabel("Error (cm)")
     axes10[i].legend()
     axes10[i].grid(True, alpha=0.4)
