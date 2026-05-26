@@ -3,14 +3,18 @@ import matplotlib.pyplot as plt  # นำเข้า Matplotlib สำหรั
 import pandas as pd         # นำเข้า Pandas สำหรับจัดการข้อมูลตาราง
 import io                   # นำเข้า io สำหรับแปลง bytes เป็น stream ที่ pandas อ่านได้
 import requests             # นำเข้า requests สำหรับดึงข้อมูลผ่าน HTTP
+import os
+from dotenv import load_dotenv
 
 # ============================================================
 # ส่วนที่ 1: Load Dataset (ดึงจาก Google Sheets)
 # ============================================================
 
-SHEET_NAME = "SensorData"   # ชื่อชีตที่ต้องการดึงข้อมูล (ใช้แสดงใน log เท่านั้น)
-SHEET_ID = "169b1I4Gos8UhkzDkxH6uX9ty3yaQ_8kCqRGjqnpb0dU"  # ID ของ Google Spreadsheet
-GID = "1511238558"          # GID ของชีตเฉพาะภายใน Spreadsheet
+load_dotenv()  # โหลดตัวแปรจาก .env เข้ามาใน environment variables ของระบบ (ถ้ามี)
+
+SHEET_NAME = os.getenv("SHEET_NAME")   # ชื่อชีตที่ต้องการดึงข้อมูล (ใช้แสดงใน log เท่านั้น)
+SHEET_ID = os.getenv("GOOGLE_SHEET_ID")  # ID ของ Google Spreadsheet
+GID = os.getenv("GOOGLE_SHEET_GID")          # GID ของชีตเฉพาะภายใน Spreadsheet
 sheet_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={GID}"  # สร้าง URL สำหรับ export ชีตเป็น CSV
 
 try:                         # เริ่มบล็อก try เพื่อจัดการข้อผิดพลาดขณะโหลดข้อมูล

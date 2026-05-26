@@ -1,0 +1,12 @@
+# Python secrets
+.env
+*.env
+
+# Arduino / ESP32 secrets
+secrets.h
+
+# Cache
+__pycache__/
+.ipynb_checkpoints/
+.vscode/
+.DS_Store

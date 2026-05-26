@@ -6,15 +6,17 @@ import requests
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import HuberRegressor
 from sklearn.pipeline import make_pipeline
+import os
+from dotenv import load_dotenv
 
 # ============================================================
 # ส่วนที่ 1: Load Dataset จาก Google Sheets
 # ============================================================
+load_dotenv()
 
-SHEET_NAME = "SensorData"
-SHEET_ID = "169b1I4Gos8UhkzDkxH6uX9ty3yaQ_8kCqRGjqnpb0dU"
-GID = "1511238558"
-
+SHEET_NAME = os.getenv("SHEET_NAME")
+SHEET_ID = SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
+GID = os.getenv("GOOGLE_SHEET_GID")
 sheet_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={GID}"
 
 

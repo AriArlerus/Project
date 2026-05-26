@@ -3,13 +3,17 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import io
 import requests
+import os
+from dotenv import load_dotenv
 
 # ============================================================
 # ส่วนที่ 1: Load Dataset (ดึงจาก Google Sheets)
 # ============================================================
-SHEET_NAME = "SensorData"
-SHEET_ID = "169b1I4Gos8UhkzDkxH6uX9ty3yaQ_8kCqRGjqnpb0dU"
-GID = "1511238558"
+load_dotenv()
+
+SHEET_NAME = os.getenv("SHEET_NAME")
+SHEET_ID = SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
+GID = os.getenv("GOOGLE_SHEET_GID")
 sheet_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={GID}"
 
 try:
@@ -271,6 +275,58 @@ for name, (m, r) in results.items():
         reduction = (1 - m / raw_mae) * 100
 
     print(f"{name:<25} {m:12.4f} {r:12.4f} {reduction:18.2f}")
+
+# ============================================================
+# MAE / RMSE by Desired Distance Range
+# รวม PSO, POA, Hybrid ในตารางเดียว
+# ============================================================
+
+def build_range_metrics(desired_all, raw_error, residuals_dict):
+    range_results = []
+
+    # ช่วงแรก 2–10 cm
+    ranges = [(2, 10)]
+
+    # ช่วงถัดไป 11–20, 21–30, ..., 391–400
+    ranges += [(start, start + 9) for start in range(11, 400, 10)]
+
+    for low, high in ranges:
+        mask = (desired_all >= low) & (desired_all <= high)
+
+        if mask.sum() == 0:
+            continue
+
+        row = {
+            "Range (cm)": f"{low}-{high}",
+            "N": int(mask.sum()),
+            "Raw MAE": mae(raw_error[mask]),
+            "Raw RMSE": rmse(raw_error[mask]),
+        }
+
+        for method_name, residual_vals in residuals_dict.items():
+            row[f"{method_name} MAE"] = mae(residual_vals[mask])
+            row[f"{method_name} RMSE"] = rmse(residual_vals[mask])
+
+        range_results.append(row)
+
+    return pd.DataFrame(range_results)
+
+
+residuals_dict = {
+    "PSO": residual_pso,
+    "POA": residual_poa,
+    "Hybrid": residual_hyb,
+}
+
+range_df = build_range_metrics(
+    desired_all=desired_all,
+    raw_error=raw_error,
+    residuals_dict=residuals_dict
+)
+
+print("\n=== MAE / RMSE by Desired Distance Range ===")
+print(range_df.to_string(index=False, float_format=lambda x: f"{x:.4f}"))
+
 # ============================================================
 # ส่วนที่ 4: พล็อตกราฟเปรียบเทียบแบบ Subplots (แยก 3 กราฟย่อยใน 1 รูป)
 # ============================================================
@@ -377,4 +433,158 @@ for i, (name, resid_vals, color) in enumerate(algorithms_10):
     axes10[i].grid(True, alpha=0.4)
 
 plt.tight_layout()
+plt.show()
+
+# ============================================================
+# Figure: MAE by Desired Distance Range (3 subplots, top-to-bottom)
+# Legend เดียวมุมขวาบน
+# ============================================================
+
+fig, axes = plt.subplots(3, 1, figsize=(14, 7), sharex=True)
+fig.suptitle("MAE by Desired Distance Range", fontsize=16, fontweight="bold")
+
+x = range_df["Range (cm)"]
+
+# -----------------------------
+# Subplot 1: PSO
+# -----------------------------
+raw_line, = axes[0].plot(
+    x, range_df["Raw MAE"],
+    marker="o", linewidth=2, linestyle="--", label="Raw"
+)
+
+pso_line, = axes[0].plot(
+    x, range_df["PSO MAE"],
+    marker="s", linewidth=2, linestyle="-", label="PSO"
+)
+
+axes[0].set_title("PSO")
+axes[0].set_ylabel("MAE (cm)")
+axes[0].grid(True, alpha=0.4)
+
+# -----------------------------
+# Subplot 2: POA
+# -----------------------------
+axes[1].plot(
+    x, range_df["Raw MAE"],
+    marker="o", linewidth=2, linestyle="--", label="Raw"
+)
+
+poa_line, = axes[1].plot(
+    x, range_df["POA MAE"],
+    marker="^", linewidth=2, linestyle="-", label="POA"
+)
+
+axes[1].set_title("POA")
+axes[1].set_ylabel("MAE (cm)")
+axes[1].grid(True, alpha=0.4)
+
+# -----------------------------
+# Subplot 3: Hybrid
+# -----------------------------
+axes[2].plot(
+    x, range_df["Raw MAE"],
+    marker="o", linewidth=2, linestyle="--", label="Raw"
+)
+
+hybrid_line, = axes[2].plot(
+    x, range_df["Hybrid MAE"],
+    marker="D", linewidth=2, linestyle="-", label="Hybrid POA-PSO"
+)
+
+axes[2].set_title("Hybrid POA-PSO")
+axes[2].set_xlabel("Desired Distance Range (cm)")
+axes[2].set_ylabel("MAE (cm)")
+axes[2].grid(True, alpha=0.4)
+
+# ปรับ label แกน X ให้เอียง
+for ax in axes:
+    ax.tick_params(axis="x", rotation=45)
+
+# Legend รวมอันเดียว มุมขวาบน
+fig.legend(
+    handles=[raw_line, pso_line, poa_line, hybrid_line],
+    labels=["Raw", "PSO", "POA", "Hybrid POA-PSO"],
+    loc="upper right",
+    bbox_to_anchor=(0.98, 0.98)
+)
+
+plt.tight_layout(rect=[0, 0, 0.95, 0.95])
+plt.show()
+
+# ============================================================
+# Figure: RMSE by Desired Distance Range (3 subplots, top-to-bottom)
+# Legend เดียวมุมขวาบน
+# ============================================================
+
+fig, axes = plt.subplots(3, 1, figsize=(14, 7), sharex=True)
+fig.suptitle("RMSE by Desired Distance Range", fontsize=16, fontweight="bold")
+
+x = range_df["Range (cm)"]
+
+# -----------------------------
+# Subplot 1: PSO
+# -----------------------------
+raw_line, = axes[0].plot(
+    x, range_df["Raw RMSE"],
+    marker="o", linewidth=2, linestyle="--", label="Raw"
+)
+
+pso_line, = axes[0].plot(
+    x, range_df["PSO RMSE"],
+    marker="s", linewidth=2, linestyle="-", label="PSO"
+)
+
+axes[0].set_title("PSO")
+axes[0].set_ylabel("RMSE (cm)")
+axes[0].grid(True, alpha=0.4)
+
+# -----------------------------
+# Subplot 2: POA
+# -----------------------------
+axes[1].plot(
+    x, range_df["Raw RMSE"],
+    marker="o", linewidth=2, linestyle="--", label="Raw"
+)
+
+poa_line, = axes[1].plot(
+    x, range_df["POA RMSE"],
+    marker="^", linewidth=2, linestyle="-", label="POA"
+)
+
+axes[1].set_title("POA")
+axes[1].set_ylabel("RMSE (cm)")
+axes[1].grid(True, alpha=0.4)
+
+# -----------------------------
+# Subplot 3: Hybrid
+# -----------------------------
+axes[2].plot(
+    x, range_df["Raw RMSE"],
+    marker="o", linewidth=2, linestyle="--", label="Raw"
+)
+
+hybrid_line, = axes[2].plot(
+    x, range_df["Hybrid RMSE"],
+    marker="D", linewidth=2, linestyle="-", label="Hybrid POA-PSO"
+)
+
+axes[2].set_title("Hybrid POA-PSO")
+axes[2].set_xlabel("Desired Distance Range (cm)")
+axes[2].set_ylabel("RMSE (cm)")
+axes[2].grid(True, alpha=0.4)
+
+# ปรับ label แกน X ให้เอียง
+for ax in axes:
+    ax.tick_params(axis="x", rotation=45)
+
+# Legend รวมอันเดียว มุมขวาบน
+fig.legend(
+    handles=[raw_line, pso_line, poa_line, hybrid_line],
+    labels=["Raw", "PSO", "POA", "Hybrid POA-PSO"],
+    loc="upper right",
+    bbox_to_anchor=(0.98, 0.98)
+)
+
+plt.tight_layout(rect=[0, 0, 0.95, 0.95])
 plt.show()

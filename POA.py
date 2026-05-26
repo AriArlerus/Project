@@ -6,13 +6,17 @@ import requests             # นำเข้า requests สำหรับส�
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import HuberRegressor
 from sklearn.pipeline import make_pipeline
+import os
+from dotenv import load_dotenv
+
 # ============================================================
 # ส่วนที่ 1: Load Dataset (ดึงจาก Google Sheets)
 # ============================================================
+load_dotenv()  # โหลดตัวแปรจาก .env เข้ามาใน environment variables ของระบบ (ถ้ามี)
 
-SHEET_NAME = "SensorData"   # ชื่อชีตที่ใช้อ้างอิงในข้อความ log (ไม่ได้ใช้ใน URL โดยตรง)
-SHEET_ID = "169b1I4Gos8UhkzDkxH6uX9ty3yaQ_8kCqRGjqnpb0dU"  # ID ของ Google Spreadsheet
-GID = "1511238558"          # GID ระบุหมายเลขชีตย่อยภายใน Spreadsheet
+SHEET_NAME = os.getenv("SHEET_NAME")   # ชื่อชีตที่ใช้อ้างอิงในข้อความ log (ไม่ได้ใช้ใน URL โดยตรง)
+SHEET_ID = os.getenv("GOOGLE_SHEET_ID")  # ID ของ Google Spreadsheet
+GID = os.getenv("GOOGLE_SHEET_GID")          # GID ระบุหมายเลขชีตย่อยภายใน Spreadsheet
 sheet_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={GID}"
 # สร้าง URL สำหรับ export ชีตเป็นไฟล์ CSV โดยฝัง SHEET_ID และ GID ลงใน URL
 
